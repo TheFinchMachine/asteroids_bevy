@@ -9,11 +9,6 @@ edition = "2021"
 bevy = "0.15"
 log = { version = "*", features = ["max_level_debug", "release_max_level_warn"] }
 
-# enable faster linker (mold)
-[target.x86_64-unknown-linux-gnu]
-linker = "clang"
-rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/mold", "-Zshare-generics=y"]
-
 [profile.dev]
 opt-level = 1
 
