@@ -5,3 +5,20 @@ edition = "2021"
 
 [dependencies]
 bevy = "0.15"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+# slower compile times, marginal perf improvements
+codegen-units = 1
+lto = "thin"
+
+[profile.wasm-release]
+# wasm really likes small binaries, so optimize for size. 
+inherits = "release"
+opt-level = "s"
+strip = "debuginfo"
