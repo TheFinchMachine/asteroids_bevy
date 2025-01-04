@@ -7,6 +7,7 @@ edition = "2021"
 # unclear if this improves perf when using the mold linker
 #bevy = { version = "0.15", features = ["dynamic_linking"] }
 bevy = "0.15"
+log = { version = "*", features = ["max_level_debug", "release_max_level_warn"] }
 
 # enable faster linker (mold)
 [target.x86_64-unknown-linux-gnu]
