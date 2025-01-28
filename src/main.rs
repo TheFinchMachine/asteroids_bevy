@@ -84,11 +84,11 @@ fn project_positions(
 
         for (mut transform, position) in &mut positionables {
             let mut new_position = position.0;
-            //Do we want to scale to window so multiple players will see the same thing?
+            // Do we want to scale to window so multiple players will see the same thing?
+            // or keep the positions consistent on an absolute and just consider the wraparound to be a projection.
+            // wraparound as projection is a nice visual, but makes collision strange.
             new_position *= GRID_SIZE;
             //wrap objects around the screen
-            // x % wh 0 < x < wh = x
-            // x % wh
             new_position.x = wrap_around(new_position.x, -window_width/2., window_width);
             new_position.y = wrap_around(new_position.y, -window_height/2., window_height);
             //println!("new_position.y: {}", new_position.y);
@@ -98,11 +98,12 @@ fn project_positions(
 }
 
 fn wrap_around(value: f32, min_value: f32, range: f32) -> f32 {
-    let mut mod_result = (value - min_value) % range;
-    if mod_result < 0. {
-        mod_result += range;
-    }
-    mod_result + min_value
+    // modulo preserves sign so we need to add range and then modulo again to handle negatives
+    // could also be done with an if statement but this is specifically branchless
+    // assuming modulo implementation is branchless.
+    // may be possible to improve by precomputing 1/range and then using a fast modulo
+    // because range only changes on window size change
+    ((value - min_value) % range + range) % range + min_value
 }
 
 fn handle_player_input(
