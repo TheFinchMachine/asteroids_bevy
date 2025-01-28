@@ -48,6 +48,7 @@ struct ShipBundle {
     rotation: Rotation,
     angular_velocity: AngularVelocity,
     angular_acceleration: AngularAcceleration,
+    last_shot: TimeStamp,
 }
 
 impl ShipBundle {
@@ -61,6 +62,7 @@ impl ShipBundle {
             rotation: Rotation(0.0),
             angular_velocity: AngularVelocity(0.0),
             angular_acceleration: AngularAcceleration(0.0),
+            last_shot: TimeStamp(Duration::ZERO)
         }
     }
 }
@@ -104,7 +106,7 @@ fn move_ship(
     }
 }
 
-const BULLET_SPEED: f32 = 10.0;
+const BULLET_SPEED: f32 = 15.0;
 const BULLET_LIFETIME: Duration = Duration::from_millis(500);
 
 #[derive(Resource)]
@@ -234,14 +236,16 @@ fn wrap_around(value: f32, min_value: f32, range: f32) -> f32 {
     ((value - min_value) % range + range) % range + min_value
 }
 
+const SHOT_SPACING: Duration = Duration::from_millis(250);
+
 fn handle_player_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     bullet_assets: Res<BulletAssets>,
     time: Res<Time>,
     mut commands: Commands,
-    mut ship: Query<(&mut Acceleration, &mut AngularAcceleration, &Position, &Rotation), With<Ship>>,
+    mut ship: Query<(&mut Acceleration, &mut AngularAcceleration, &Position, &Rotation, &mut TimeStamp), With<Ship>>,
 ) {
-    if let Ok((mut acceleration, mut angular_acceleration, position, rotation)) = ship.get_single_mut() {
+    if let Ok((mut acceleration, mut angular_acceleration, position, rotation, mut last_shot_time)) = ship.get_single_mut() {
         if keyboard_input.pressed(KeyCode::ArrowUp) {
             acceleration.0.y = 1.;
         } else if keyboard_input.pressed(KeyCode::ArrowDown) {
@@ -259,12 +263,17 @@ fn handle_player_input(
         }
 
         if keyboard_input.pressed(KeyCode::Space) {
-            spawn_bullet(
-                commands,
-                bullet_assets,
-                position.0,
-                rotation.0,
-                time);
+            let time_elapsed = time.elapsed();
+            if time_elapsed - last_shot_time.0 > SHOT_SPACING {
+                spawn_bullet(
+                    commands,
+                    bullet_assets,
+                    position.0,
+                    rotation.0,
+                    time
+                );
+                last_shot_time.0 = time_elapsed;
+            }
         }
     }
 }
