@@ -3,6 +3,17 @@ use bevy::{prelude::*, scene};
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 
+
+// don't use Rot2 as it is effectivly a 2d quat. 2d rots don't suffer from gimbal lock, so we don't need that complexity.
+#[derive(Component)]
+struct Rotation(f32);
+
+#[derive(Component)]
+struct AngularVelocity(f32);
+
+#[derive(Component)]
+struct AngularAcceleration(f32);
+
 #[derive(Component)]
 struct Position(Vec2);
 
@@ -10,9 +21,16 @@ struct Position(Vec2);
 struct Velocity(Vec2);
 
 #[derive(Component)]
+struct Acceleration(Vec2);
+
+#[derive(Component)]
 struct Shape(Vec2);
 
-const SHIP_SPEED: f32 = 0.15;
+const SHIP_SPEED: f32 = 0.3;
+const SHIP_DAMPING: f32 = 0.99;
+
+const SHIP_SPEED_ANGULAR: f32 = 0.02;
+const SHIP_DAMPING_ANGULAR: f32 = 0.8;
 
 #[derive(Component)]
 struct Ship;
@@ -23,6 +41,10 @@ struct ShipBundle {
     shape: Shape,
     position: Position,
     velocity: Velocity,
+    acceleration: Acceleration,
+    rotation: Rotation,
+    angular_velocity: AngularVelocity,
+    angular_acceleration: AngularAcceleration,
 }
 
 impl ShipBundle {
@@ -32,6 +54,10 @@ impl ShipBundle {
             shape: Shape(Vec2::new(10., 10.)),
             position: Position(Vec2::new(x, y)),
             velocity: Velocity(Vec2::new(0., 0.)),
+            acceleration: Acceleration(Vec2::new(0., 0.)),
+            rotation: Rotation(0.0),
+            angular_velocity: AngularVelocity(0.0),
+            angular_acceleration: AngularAcceleration(0.0),
         }
     }
 }
@@ -57,11 +83,21 @@ fn spawn_ship(
 }
 
 fn move_ship(
-    mut ship: Query<(&mut Position, &Velocity), With<Ship>>
+    mut ship: Query<(
+        &mut Position, &mut Velocity, &Acceleration,
+        &mut Rotation, &mut AngularVelocity, &AngularAcceleration), With<Ship>>
 ) {
-    for (mut position, velocity) in &mut ship {
-        position.0 = position.0 + velocity.0 * SHIP_SPEED;
+    for (mut position, mut velocity, acceleration,
+        mut rotation, mut angular_velocity, angular_acceleration,) in &mut ship {
+        angular_velocity.0 += angular_acceleration.0 * SHIP_SPEED_ANGULAR;
+        rotation.0 += angular_velocity.0;
+        angular_velocity.0 *= SHIP_DAMPING_ANGULAR;
 
+        let rotator = Rot2::radians(rotation.0);
+
+        velocity.0 += rotator * acceleration.0  * SHIP_SPEED;
+        position.0 += velocity.0;
+        velocity.0 *= SHIP_DAMPING;
     }
 }
 
@@ -71,9 +107,9 @@ fn spawn_camera(mut commands: Commands) {
         .insert(Camera2d);
 }
 
-const GRID_SIZE: f32 = 100.;
+const GRID_SIZE: f32 = 1.;
 fn project_positions(
-    mut positionables: Query<(&mut Transform, &Position)>,
+    mut positionables: Query<(&mut Transform, &Position, &Rotation)>,
     window: Query<&Window>,
 ) {
     if let Ok(window) = window.get_single() {
@@ -82,7 +118,7 @@ fn project_positions(
 
         //let window_aspect = window_width / window_height;
 
-        for (mut transform, position) in &mut positionables {
+        for (mut transform, position, rotation) in &mut positionables {
             let mut new_position = position.0;
             // Do we want to scale to window so multiple players will see the same thing?
             // or keep the positions consistent on an absolute and just consider the wraparound to be a projection.
@@ -93,6 +129,8 @@ fn project_positions(
             new_position.y = wrap_around(new_position.y, -window_height/2., window_height);
             //println!("new_position.y: {}", new_position.y);
             transform.translation = new_position.extend(0.);
+
+            transform.rotation = Quat::from_rotation_z(rotation.0);
         }
     }
 }
@@ -100,23 +138,28 @@ fn project_positions(
 fn wrap_around(value: f32, min_value: f32, range: f32) -> f32 {
     // modulo preserves sign so we need to add range and then modulo again to handle negatives
     // could also be done with an if statement but this is specifically branchless
-    // assuming modulo implementation is branchless.
-    // may be possible to improve by precomputing 1/range and then using a fast modulo
-    // because range only changes on window size change
     ((value - min_value) % range + range) % range + min_value
 }
 
 fn handle_player_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut ship: Query<&mut Velocity, With<Ship>>,
+    mut ship: Query<(&mut Acceleration, &mut AngularAcceleration), With<Ship>>,
 ) {
-    if let Ok(mut velocity) = ship.get_single_mut() {
+    if let Ok((mut acceleration, mut angular_acceleration)) = ship.get_single_mut() {
         if keyboard_input.pressed(KeyCode::ArrowUp) {
-            velocity.0.y = 1.;
+            acceleration.0.y = 1.;
         } else if keyboard_input.pressed(KeyCode::ArrowDown) {
-            velocity.0.y = -1.;
+            acceleration.0.y = -1.;
         } else {
-            velocity.0.y = 0.;
+            acceleration.0.y = 0.;
+        }
+
+        if keyboard_input.pressed(KeyCode::ArrowRight) {
+            angular_acceleration.0 = -1.;
+        } else if keyboard_input.pressed(KeyCode::ArrowLeft) {
+            angular_acceleration.0 = 1.;
+        } else {
+            angular_acceleration.0 = 0.;
         }
     }
 }
