@@ -101,6 +101,78 @@ fn move_ship(
     }
 }
 
+#[derive(Resource)]
+struct BulletAssets {
+    mesh: Handle<Mesh>,
+    material: Handle<ColorMaterial>,
+}
+
+#[derive(Component)]
+struct Bullet;
+
+#[derive(Bundle)]
+struct BulletBundle {
+    bullet: Bullet,
+    shape: Shape,
+    position: Position,
+    velocity: Velocity,
+    rotation: Rotation,
+}
+
+impl BulletBundle {
+    fn new(position: Vec2, rotation: f32) -> Self {
+        Self {
+            bullet: Bullet,
+            shape: Shape(Vec2::new(4., 4.)),
+            position: Position(position),
+            velocity: Velocity(Vec2::new(0.0, 15.0)),
+            rotation: Rotation(rotation)
+        }
+    }
+}
+
+fn load_bullet(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let shape = Circle::new(4.);
+    let color = Color::srgb(1., 0., 0.);
+
+    let mesh = meshes.add(shape);
+    let material = materials.add(color);
+
+    commands.insert_resource(BulletAssets {
+        mesh,
+        material
+    })
+}
+
+// TODO: use the same mesh and material for all bullets
+fn spawn_bullet(
+    mut commands: Commands,
+    bullet_assets: Res<BulletAssets>,
+    position: Vec2,
+    rotation: f32,
+) { 
+    commands.spawn((
+        BulletBundle::new(position, rotation),
+        Mesh2d(bullet_assets.mesh.clone().into()),
+        MeshMaterial2d(bullet_assets.material.clone()),
+        Transform::default()
+    ));
+}
+
+// TODO; calculate velocity vector on spawn
+fn move_bullets(
+    mut bullets: Query<(&mut Position, &Velocity, &Rotation), With<Bullet>>,
+) {
+    for (mut position, velocity, rotation) in &mut bullets {
+        let rotator = Rot2::radians(rotation.0);
+        position.0 += rotator * velocity.0;
+    }
+}
+
 fn spawn_camera(mut commands: Commands) {
     commands
         .spawn_empty()
@@ -143,9 +215,11 @@ fn wrap_around(value: f32, min_value: f32, range: f32) -> f32 {
 
 fn handle_player_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut ship: Query<(&mut Acceleration, &mut AngularAcceleration), With<Ship>>,
+    bullet_assets: Res<BulletAssets>,
+    mut commands: Commands,
+    mut ship: Query<(&mut Acceleration, &mut AngularAcceleration, &Position, &Rotation), With<Ship>>,
 ) {
-    if let Ok((mut acceleration, mut angular_acceleration)) = ship.get_single_mut() {
+    if let Ok((mut acceleration, mut angular_acceleration, position, rotation)) = ship.get_single_mut() {
         if keyboard_input.pressed(KeyCode::ArrowUp) {
             acceleration.0.y = 1.;
         } else if keyboard_input.pressed(KeyCode::ArrowDown) {
@@ -161,6 +235,14 @@ fn handle_player_input(
         } else {
             angular_acceleration.0 = 0.;
         }
+
+        if keyboard_input.pressed(KeyCode::Space) {
+            spawn_bullet(
+                commands,
+                bullet_assets,
+                position.0,
+                rotation.0);
+        }
     }
 }
 
@@ -171,11 +253,12 @@ impl Plugin for AsteroidsPlugin {
         app.add_systems(Startup, (
             spawn_camera,
             spawn_ship,
-
+            load_bullet,
         ));
         app.add_systems(Update, (
             handle_player_input,
             move_ship,
+            move_bullets,
             project_positions.after(move_ship),
         ));
     }
