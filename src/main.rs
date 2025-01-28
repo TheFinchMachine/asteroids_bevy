@@ -2,7 +2,10 @@ use bevy::input::keyboard::Key;
 use bevy::{prelude::*, scene};
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
+use std::time::Duration;
 
+#[derive(Component)]
+struct TimeStamp(Duration);
 
 // don't use Rot2 as it is effectivly a 2d quat. 2d rots don't suffer from gimbal lock, so we don't need that complexity.
 #[derive(Component)]
@@ -101,6 +104,8 @@ fn move_ship(
     }
 }
 
+const BULLET_SPEED: f32 = 10.0;
+
 #[derive(Resource)]
 struct BulletAssets {
     mesh: Handle<Mesh>,
@@ -115,18 +120,20 @@ struct BulletBundle {
     bullet: Bullet,
     shape: Shape,
     position: Position,
-    velocity: Velocity,
     rotation: Rotation,
+    velocity: Velocity,
+    spawn_time: TimeStamp,
 }
 
 impl BulletBundle {
-    fn new(position: Vec2, rotation: f32) -> Self {
+    fn new(position: Vec2, rotation: f32, spawn_time: Duration) -> Self {
         Self {
             bullet: Bullet,
             shape: Shape(Vec2::new(4., 4.)),
             position: Position(position),
-            velocity: Velocity(Vec2::new(0.0, 15.0)),
-            rotation: Rotation(rotation)
+            rotation: Rotation(rotation),
+            velocity: Velocity(Rot2::radians(rotation) * Vec2::new(0.0, BULLET_SPEED)),
+            spawn_time: TimeStamp(spawn_time),
         }
     }
 }
@@ -154,9 +161,10 @@ fn spawn_bullet(
     bullet_assets: Res<BulletAssets>,
     position: Vec2,
     rotation: f32,
+    time: Res<Time>,
 ) { 
     commands.spawn((
-        BulletBundle::new(position, rotation),
+        BulletBundle::new(position, rotation, time.elapsed()),
         Mesh2d(bullet_assets.mesh.clone().into()),
         MeshMaterial2d(bullet_assets.material.clone()),
         Transform::default()
@@ -165,13 +173,13 @@ fn spawn_bullet(
 
 // TODO; calculate velocity vector on spawn
 fn move_bullets(
-    mut bullets: Query<(&mut Position, &Velocity, &Rotation), With<Bullet>>,
+    mut bullets: Query<(&mut Position, &Velocity), With<Bullet>>,
 ) {
-    for (mut position, velocity, rotation) in &mut bullets {
-        let rotator = Rot2::radians(rotation.0);
-        position.0 += rotator * velocity.0;
+    for (mut position, velocity) in &mut bullets {
+        position.0 += velocity.0;
     }
 }
+
 
 fn spawn_camera(mut commands: Commands) {
     commands
@@ -216,6 +224,7 @@ fn wrap_around(value: f32, min_value: f32, range: f32) -> f32 {
 fn handle_player_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     bullet_assets: Res<BulletAssets>,
+    time: Res<Time>,
     mut commands: Commands,
     mut ship: Query<(&mut Acceleration, &mut AngularAcceleration, &Position, &Rotation), With<Ship>>,
 ) {
@@ -241,7 +250,8 @@ fn handle_player_input(
                 commands,
                 bullet_assets,
                 position.0,
-                rotation.0);
+                rotation.0,
+                time);
         }
     }
 }
