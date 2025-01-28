@@ -105,6 +105,7 @@ fn move_ship(
 }
 
 const BULLET_SPEED: f32 = 10.0;
+const BULLET_LIFETIME: Duration = Duration::from_millis(500);
 
 #[derive(Resource)]
 struct BulletAssets {
@@ -180,6 +181,18 @@ fn move_bullets(
     }
 }
 
+fn destroy_bullets (
+    bullets: Query<(Entity, &TimeStamp), With<Bullet>>,
+    time: Res<Time>,
+    mut commands: Commands,
+) {
+    let time_elapsed = time.elapsed();
+    for (entity, spawn_time) in &bullets { 
+        if time_elapsed - spawn_time.0 > BULLET_LIFETIME  {
+            commands.entity(entity).despawn();
+        }
+    }
+}
 
 fn spawn_camera(mut commands: Commands) {
     commands
@@ -258,6 +271,9 @@ fn handle_player_input(
 
 pub struct AsteroidsPlugin;
 
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+struct ObjectUpdate;
+
 impl Plugin for AsteroidsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, (
@@ -269,7 +285,10 @@ impl Plugin for AsteroidsPlugin {
             handle_player_input,
             move_ship,
             move_bullets,
-            project_positions.after(move_ship),
+            destroy_bullets,
+        ).in_set(ObjectUpdate));
+        app.add_systems(Update, (
+            project_positions.after(ObjectUpdate)
         ));
     }
 }
