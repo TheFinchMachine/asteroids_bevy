@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, scene};
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 
@@ -35,10 +35,12 @@ impl ShipBundle {
 
 fn spawn_ship(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>
+    mut materials: ResMut<Assets<ColorMaterial>>, 
+    asset_server: Res<AssetServer>,
 ) {
-    let mesh = meshes.add(create_ship(25.0));
+    let mesh = asset_server.load(
+        GltfAssetLabel::Primitive { mesh: 0, primitive: 0 }.from_asset("meshes/ship.gltf")
+    );
     
     let color = Color::srgb(0.8, 0.8, 1.0);
     let material = materials.add(color);
@@ -47,7 +49,7 @@ fn spawn_ship(
         ShipBundle::new(50., 50.),
         Mesh2d(mesh),
         MeshMaterial2d(material),
-        Transform::default(),
+        Transform::from_scale(Vec3::new(50., 50., 50.)),
     ));
 }
 
