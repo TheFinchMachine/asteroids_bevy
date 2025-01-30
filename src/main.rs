@@ -3,6 +3,10 @@ use bevy::{prelude::*, scene};
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 use std::time::Duration;
+use rand::prelude::*;
+use rand_chacha::ChaCha8Rng;
+
+const WORLD_SEED: u64 = 1024;
 
 #[derive(Component)]
 struct TimeStamp(Duration);
@@ -158,7 +162,6 @@ fn load_bullet(
     })
 }
 
-// TODO: use the same mesh and material for all bullets
 fn spawn_bullet(
     mut commands: Commands,
     bullet_assets: Res<BulletAssets>,
@@ -174,7 +177,6 @@ fn spawn_bullet(
     ));
 }
 
-// TODO; calculate velocity vector on spawn
 fn move_bullets(
     mut bullets: Query<(&mut Position, &Velocity), With<Bullet>>,
 ) {
@@ -194,6 +196,157 @@ fn destroy_bullets (
             commands.entity(entity).despawn();
         }
     }
+}
+
+const ASTEROID_VARIANTS: usize = 10;
+
+#[derive(Resource)]
+struct AsteroidAssets {
+    meshes: [Handle<Mesh>; ASTEROID_VARIANTS],
+    material: Handle<ColorMaterial>
+}
+
+#[derive(Component)]
+struct Asteroid;
+
+// TODO: add scale. Needs update to project positions
+#[derive(Bundle)]
+struct AsteroidBundle {
+    asteroid: Asteroid,
+    position: Position,
+    rotation: Rotation,
+    velocity: Velocity,
+    angular_velocity: AngularVelocity,
+}
+
+// TODO: angular_velocity seeded random
+impl AsteroidBundle {
+    fn new(position: Vec2, velocity: Vec2) -> Self {
+        Self {
+            asteroid: Asteroid,
+            position: Position(position),
+            rotation: Rotation(0.0),
+            velocity: Velocity(velocity),
+            angular_velocity: AngularVelocity(3.0)
+        }
+    }
+}
+
+fn load_asteroids(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>
+) {
+    let material = materials.add(Color::srgb(0.9, 1., 0.9));
+
+    let mut rng = ChaCha8Rng::seed_from_u64(WORLD_SEED);
+    let new_meshes: [Handle<Mesh>; ASTEROID_VARIANTS] = std::array::from_fn(|_| {
+        meshes.add(create_astroid_mesh(&mut rng))
+    });
+
+    commands.insert_resource(AsteroidAssets {
+        meshes: new_meshes,
+        material
+    });
+}
+
+fn spawn_asteroid(
+    mut commands: Commands,
+    mut asteroid_assets: Res<AsteroidAssets>,
+    position: Vec2,
+    velocity: Vec2,
+) {
+    let mut rng = ChaCha8Rng::seed_from_u64(WORLD_SEED);
+    let mesh = rng.random_range(0..ASTEROID_VARIANTS);
+    commands.spawn((
+        AsteroidBundle::new(position, velocity),
+        Mesh2d(asteroid_assets.meshes[mesh].clone().into()),
+        MeshMaterial2d(asteroid_assets.material.clone()),
+        Transform::default()
+    ));
+}
+
+//TODO: use a grid size that I can select positions without worrying about window size
+fn spawn_asteroid_random(
+    mut commands: Commands,
+    mut asteroid_assets: Res<AsteroidAssets>,
+) {
+    let mut rng = ChaCha8Rng::seed_from_u64(WORLD_SEED);
+    let position = Vec2::new(rng.random_range(-200.0..200.0), rng.random_range(-200.0..200.0));
+    let velocity = Vec2::new(rng.random_range(-2.0..2.0),rng.random_range(-2.0..2.0));
+
+    spawn_asteroid(commands, asteroid_assets, position, velocity);
+}
+
+fn move_asteroids(
+    mut asteroids: Query<(&mut Position, &mut Rotation, &Velocity, &AngularVelocity), With<Asteroid>>
+) {
+    for (mut position, mut rotation, velocity, angular_velocity) in &mut asteroids {
+        position.0 += velocity.0;
+        rotation.0 += angular_velocity.0;
+    }
+}
+
+fn create_astroid_mesh(rng: &mut ChaCha8Rng) -> Mesh {
+    // create semi-random circle
+    let num_verts = rng.random_range(8..12);
+    let mut positions = Vec::with_capacity(num_verts);
+    let angle_step = 360.0/num_verts as f32;
+    for i in 0..num_verts {
+        let angle_range = rng.random_range(0.0..2.*angle_step/5.);
+        let radius = rng.random_range(0.5..1.5);
+        let angle = rng.random_range(i as f32 * angle_step-angle_range..i as f32 * angle_step+angle_range);
+        let rotator = Rot2::degrees(angle);
+        let point = rotator * Vec2::new(0.0, radius);
+        positions.push(point)
+    }
+
+    // calculate normals for inset
+    let mut normals = Vec::with_capacity(num_verts);
+    let mut cycle = positions.iter().cycle().take(positions.len() + 2);
+
+    let mut previous_position = cycle.next().unwrap();
+    let mut current_position = cycle.next().unwrap();
+    for next_position in cycle {
+        let edge0 = (current_position - previous_position).normalize();
+        let edge1 = (current_position - next_position).normalize();
+        let normal = (edge0 + edge1).normalize();
+        // WARNING: normals offset by one to the left for positions!
+        normals.push(normal);
+        previous_position = current_position;
+        current_position = next_position;
+    }
+    normals.rotate_right(1);
+
+    // inset
+    let mut positions_inset = Vec::with_capacity(num_verts);
+    for i in 0..num_verts {
+        let new_position = positions[i] + (normals[i] * 1.5);
+        positions_inset.push(new_position);
+    }
+    positions.extend(positions_inset);
+    let positions_3d: Vec<Vec3> = positions.into_iter().map(|pos| pos.extend(0.0)).collect();
+
+    // calculate triangle indices
+    let mut indices = Vec::new();
+    for i in 0..num_verts {
+        //triangle 1 ccw ... I think
+        indices.push(i as u32);
+        indices.push((i + num_verts) as u32);
+        indices.push((i + 1) as u32);
+        
+        //triangle 2 ccw ... I think
+        indices.push((i + num_verts) as u32);
+        indices.push((i + num_verts + 1) as u32);
+        indices.push((i  + 1) as u32);
+    }
+
+    // build mesh
+    Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions_3d)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 0.0, 1.0]; num_verts*2])
+        .with_inserted_indices(mesh::Indices::U32(indices))
+    
 }
 
 fn spawn_camera(mut commands: Commands) {
@@ -289,11 +442,14 @@ impl Plugin for AsteroidsPlugin {
             spawn_camera,
             spawn_ship,
             load_bullet,
+            load_asteroids,
         ));
         app.add_systems(Update, (
             handle_player_input,
+            spawn_asteroid_random,
             move_ship,
             move_bullets,
+            move_asteroids,
             destroy_bullets,
         ).in_set(ObjectUpdate));
         app.add_systems(Update, (
