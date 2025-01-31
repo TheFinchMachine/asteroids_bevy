@@ -2,9 +2,11 @@ use bevy::input::keyboard::Key;
 use bevy::{prelude::*, scene};
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
+use bevy::time::common_conditions::on_timer;
+use bevy::sprite::{Wireframe2dPlugin, Wireframe2dConfig, Wireframe2d};
 use std::time::Duration;
-use rand::prelude::*;
-use rand_chacha::ChaCha8Rng;
+use bevy_turborand::prelude::*;
+
 
 const WORLD_SEED: u64 = 1024;
 
@@ -171,7 +173,7 @@ fn spawn_bullet(
 ) { 
     commands.spawn((
         BulletBundle::new(position, rotation, time.elapsed()),
-        Mesh2d(bullet_assets.mesh.clone().into()),
+        Mesh2d(bullet_assets.mesh.clone()),
         MeshMaterial2d(bullet_assets.material.clone()),
         Transform::default()
     ));
@@ -196,6 +198,20 @@ fn destroy_bullets (
             commands.entity(entity).despawn();
         }
     }
+}
+
+#[derive(Resource)]
+struct SpawnGenerator {
+    rng: RngComponent,
+}
+
+fn load_spawner(
+    mut commands: Commands,
+    mut global_rng: ResMut<GlobalRng>,
+) {
+    commands.insert_resource(SpawnGenerator {
+        rng: RngComponent::from(&mut global_rng),
+    });
 }
 
 const ASTEROID_VARIANTS: usize = 10;
@@ -227,7 +243,7 @@ impl AsteroidBundle {
             position: Position(position),
             rotation: Rotation(0.0),
             velocity: Velocity(velocity),
-            angular_velocity: AngularVelocity(3.0)
+            angular_velocity: AngularVelocity(0.0)
         }
     }
 }
@@ -235,13 +251,13 @@ impl AsteroidBundle {
 fn load_asteroids(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut spawner: ResMut<SpawnGenerator>
 ) {
-    let material = materials.add(Color::srgb(0.9, 1., 0.9));
+    let material = materials.add(Color::srgb(0.5, 1., 0.5));
 
-    let mut rng = ChaCha8Rng::seed_from_u64(WORLD_SEED);
     let new_meshes: [Handle<Mesh>; ASTEROID_VARIANTS] = std::array::from_fn(|_| {
-        meshes.add(create_astroid_mesh(&mut rng))
+        meshes.add(create_astroid_mesh(&mut spawner))
     });
 
     commands.insert_resource(AsteroidAssets {
@@ -251,31 +267,34 @@ fn load_asteroids(
 }
 
 fn spawn_asteroid(
-    mut commands: Commands,
-    mut asteroid_assets: Res<AsteroidAssets>,
+    commands: &mut Commands,
+    asteroid_assets: &Res<AsteroidAssets>,
+    spawner: &mut ResMut<SpawnGenerator>,
     position: Vec2,
     velocity: Vec2,
 ) {
-    let mut rng = ChaCha8Rng::seed_from_u64(WORLD_SEED);
-    let mesh = rng.random_range(0..ASTEROID_VARIANTS);
+    let mesh = spawner.rng.usize(0..ASTEROID_VARIANTS);
     commands.spawn((
         AsteroidBundle::new(position, velocity),
-        Mesh2d(asteroid_assets.meshes[mesh].clone().into()),
+        Mesh2d(asteroid_assets.meshes[mesh].clone()),
         MeshMaterial2d(asteroid_assets.material.clone()),
-        Transform::default()
+        Transform::from_scale(Vec3::new(10., 10., 10.)),
     ));
 }
 
 //TODO: use a grid size that I can select positions without worrying about window size
+//TODO: use a shared seed so we don't get the same velocity every time
 fn spawn_asteroid_random(
     mut commands: Commands,
-    mut asteroid_assets: Res<AsteroidAssets>,
+    asteroid_assets: Res<AsteroidAssets>,
+    mut spawner: ResMut<SpawnGenerator>,
 ) {
-    let mut rng = ChaCha8Rng::seed_from_u64(WORLD_SEED);
-    let position = Vec2::new(rng.random_range(-200.0..200.0), rng.random_range(-200.0..200.0));
-    let velocity = Vec2::new(rng.random_range(-2.0..2.0),rng.random_range(-2.0..2.0));
+    for _ in 0..ASTEROID_VARIANTS{
+        let position = Vec2::new(spawner.rng.f32_normalized()*200.0, spawner.rng.f32_normalized()*200.0);
+        let velocity = Vec2::new(spawner.rng.f32_normalized()*3.0, spawner.rng.f32_normalized()*3.0);
 
-    spawn_asteroid(commands, asteroid_assets, position, velocity);
+        spawn_asteroid(&mut commands, &asteroid_assets, &mut spawner, position, velocity);
+    }
 }
 
 fn move_asteroids(
@@ -287,30 +306,43 @@ fn move_asteroids(
     }
 }
 
-fn create_astroid_mesh(rng: &mut ChaCha8Rng) -> Mesh {
+fn create_astroid_mesh(spawner: &mut ResMut<SpawnGenerator>) -> Mesh {
+    let rng = &mut spawner.rng;
     // create semi-random circle
-    let num_verts = rng.random_range(8..12);
-    let mut positions = Vec::with_capacity(num_verts);
+    let num_verts = rng.usize(8..12);
     let angle_step = 360.0/num_verts as f32;
+    let angle_range = angle_step * 0.2;
+    let mut positions = Vec::with_capacity(num_verts);
+    
     for i in 0..num_verts {
-        let angle_range = rng.random_range(0.0..2.*angle_step/5.);
-        let radius = rng.random_range(0.5..1.5);
-        let angle = rng.random_range(i as f32 * angle_step-angle_range..i as f32 * angle_step+angle_range);
+        let radius = rng.f32()*0.5 + 1.0;
+        let angle = rng.f32_normalized()*(i as f32 * angle_range) + (i as f32 * angle_step);
         let rotator = Rot2::degrees(angle);
         let point = rotator * Vec2::new(0.0, radius);
         positions.push(point)
     }
 
     // calculate normals for inset
+    // normals can face the wrong way if the verts are concave
+    // therefore, base normal direction on angle step
     let mut normals = Vec::with_capacity(num_verts);
     let mut cycle = positions.iter().cycle().take(positions.len() + 2);
 
     let mut previous_position = cycle.next().unwrap();
     let mut current_position = cycle.next().unwrap();
     for next_position in cycle {
-        let edge0 = (current_position - previous_position).normalize();
-        let edge1 = (current_position - next_position).normalize();
-        let normal = (edge0 + edge1).normalize();
+        let edge0 = (previous_position - current_position).normalize();
+        let edge1 = (next_position - current_position).normalize();
+        let mut normal = Vec2::new(0.0, 1.0);
+        if edge0.dot(edge1) < -0.99 {  
+            normal = Vec2::new(-edge0.y, edge0.x);
+        } else {
+            normal = (edge0 + edge1).normalize();
+        }
+        
+        if normal.dot(current_position.normalize()) < 0.0 {
+            normal = -normal;
+        }
         // WARNING: normals offset by one to the left for positions!
         normals.push(normal);
         previous_position = current_position;
@@ -321,7 +353,8 @@ fn create_astroid_mesh(rng: &mut ChaCha8Rng) -> Mesh {
     // inset
     let mut positions_inset = Vec::with_capacity(num_verts);
     for i in 0..num_verts {
-        let new_position = positions[i] + (normals[i] * 1.5);
+        
+        let new_position = positions[i] + (normals[i] * 0.2);
         positions_inset.push(new_position);
     }
     positions.extend(positions_inset);
@@ -330,21 +363,24 @@ fn create_astroid_mesh(rng: &mut ChaCha8Rng) -> Mesh {
     // calculate triangle indices
     let mut indices = Vec::new();
     for i in 0..num_verts {
-        //triangle 1 ccw ... I think
-        indices.push(i as u32);
-        indices.push((i + num_verts) as u32);
-        indices.push((i + 1) as u32);
+        let max = num_verts*2;
+        //triangle 1 cw, which is wrong
+        indices.push((i % max) as u32);
+        indices.push(((i + num_verts) % max) as u32);
+        indices.push(((i + 1) % num_verts) as u32);
         
-        //triangle 2 ccw ... I think
-        indices.push((i + num_verts) as u32);
-        indices.push((i + num_verts + 1) as u32);
-        indices.push((i  + 1) as u32);
+        //triangle 2 cw, which is wrong
+        indices.push(((i + num_verts) % max) as u32);
+        indices.push(((i + 1) % num_verts + num_verts) as u32);
+        indices.push(((i + 1) % num_verts) as u32);
     }
+
+    let normals_3d = vec![[0.0, 0.0, 1.0]; num_verts*2];
 
     // build mesh
     Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions_3d)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 0.0, 1.0]; num_verts*2])
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals_3d)
         .with_inserted_indices(mesh::Indices::U32(indices))
     
 }
@@ -355,6 +391,8 @@ fn spawn_camera(mut commands: Commands) {
         .insert(Camera2d);
 }
 
+
+// TODO: grid should extend a little be beyond the window to avoid pop-in
 const GRID_SIZE: f32 = 1.;
 fn project_positions(
     mut positionables: Query<(&mut Transform, &Position, &Rotation)>,
@@ -438,15 +476,18 @@ struct ObjectUpdate;
 
 impl Plugin for AsteroidsPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(RngPlugin::new().with_rng_seed(WORLD_SEED));
         app.add_systems(Startup, (
             spawn_camera,
             spawn_ship,
+            load_spawner,
             load_bullet,
-            load_asteroids,
+            load_asteroids.after(load_spawner),
+            spawn_asteroid_random.after(load_asteroids),
         ));
         app.add_systems(Update, (
             handle_player_input,
-            spawn_asteroid_random,
+            //spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
             move_ship,
             move_bullets,
             move_asteroids,
