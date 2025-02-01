@@ -24,6 +24,9 @@ struct AngularVelocity(f32);
 struct AngularAcceleration(f32);
 
 #[derive(Component)]
+struct AngularDamping(f32);
+
+#[derive(Component)]
 struct Position(Vec2);
 
 #[derive(Component)]
@@ -33,16 +36,19 @@ struct Velocity(Vec2);
 struct Acceleration(Vec2);
 
 #[derive(Component)]
+struct Damping(f32);
+
+#[derive(Component)]
 struct Scale(f32);
 
 #[derive(Component)]
 struct Shape(Vec2);
 
-const SHIP_SPEED: f32 = 0.3;
-const SHIP_DAMPING: f32 = 0.99;
+const SHIP_SPEED: f32 = 2.0;
+const SHIP_DAMPING: f32 = 1.0;
 
-const SHIP_SPEED_ANGULAR: f32 = 0.02;
-const SHIP_DAMPING_ANGULAR: f32 = 0.8;
+const SHIP_SPEED_ANGULAR: f32 = 6.0;
+const SHIP_DAMPING_ANGULAR: f32 = 10.0;
 
 #[derive(Component)]
 struct Ship;
@@ -56,8 +62,10 @@ struct ShipBundle {
     scale: Scale,
     velocity: Velocity,
     acceleration: Acceleration,
+    damping: Damping,
     angular_velocity: AngularVelocity,
     angular_acceleration: AngularAcceleration,
+    angular_damping: AngularDamping,
     last_shot: TimeStamp,
 }
 
@@ -71,8 +79,10 @@ impl ShipBundle {
             scale: Scale(10.0),
             velocity: Velocity(Vec2::new(0., 0.)),
             acceleration: Acceleration(Vec2::new(0., 0.)),
+            damping: Damping(SHIP_DAMPING),
             angular_velocity: AngularVelocity(0.0),
             angular_acceleration: AngularAcceleration(0.0),
+            angular_damping: AngularDamping(SHIP_DAMPING_ANGULAR),
             last_shot: TimeStamp(Duration::ZERO)
         }
     }
@@ -99,25 +109,38 @@ fn spawn_ship(
 }
 
 fn move_ship(
+    time: Res<Time>,
     mut ship: Query<(
         &mut Position, &mut Velocity, &Acceleration,
         &mut Rotation, &mut AngularVelocity, &AngularAcceleration), With<Ship>>
 ) {
     for (mut position, mut velocity, acceleration,
         mut rotation, mut angular_velocity, angular_acceleration,) in &mut ship {
-        angular_velocity.0 += angular_acceleration.0 * SHIP_SPEED_ANGULAR;
-        rotation.0 += angular_velocity.0;
-        angular_velocity.0 *= SHIP_DAMPING_ANGULAR;
+        //scale acceleration and velocity and damping
+        angular_velocity.0 += angular_acceleration.0 * SHIP_SPEED_ANGULAR * time.delta_secs();
+        rotation.0 += angular_velocity.0 * time.delta_secs();
+        angular_velocity.0 *= (-SHIP_DAMPING_ANGULAR*time.delta_secs()).exp();
 
         let rotator = Rot2::radians(rotation.0);
 
-        velocity.0 += rotator * acceleration.0  * SHIP_SPEED;
-        position.0 += velocity.0;
-        velocity.0 *= SHIP_DAMPING;
+        //scale acceleration and velocity and damping
+        velocity.0 += rotator * acceleration.0  * SHIP_SPEED * time.delta_secs();
+        position.0 += velocity.0 * time.delta_secs();
+        velocity.0 *= (-SHIP_DAMPING*time.delta_secs()).exp();
     }
 }
 
-const BULLET_SPEED: f32 = 15.0;
+fn move_obj(
+    time: Res<Time>,
+    mut obj: Query<(&mut Position, &mut Rotation, &Velocity, &AngularVelocity), Without<Ship>>
+) {
+    for (mut position, mut rotation, velocity, angular_velocity) in &mut obj {
+        position.0 += velocity.0*time.delta_secs();
+        rotation.0 += angular_velocity.0*time.delta_secs();
+    }
+}
+
+const BULLET_SPEED: f32 = 6.0;
 const BULLET_LIFETIME: Duration = Duration::from_millis(500);
 
 #[derive(Resource)]
@@ -136,6 +159,7 @@ struct BulletBundle {
     position: Position,
     rotation: Rotation,
     velocity: Velocity,
+    angular_velocity: AngularVelocity,
     scale: Scale,
     spawn_time: TimeStamp,
 }
@@ -147,6 +171,7 @@ impl BulletBundle {
             shape: Shape(Vec2::new(4., 4.)),
             position: Position(position),
             rotation: Rotation(rotation),
+            angular_velocity: AngularVelocity(0.0),
             scale: Scale(1.0),
             velocity: Velocity(Rot2::radians(rotation) * Vec2::new(0.0, BULLET_SPEED)),
             spawn_time: TimeStamp(spawn_time),
@@ -184,14 +209,6 @@ fn spawn_bullet(
         MeshMaterial2d(bullet_assets.material.clone()),
         Transform::default()
     ));
-}
-
-fn move_bullets(
-    mut bullets: Query<(&mut Position, &Velocity), With<Bullet>>,
-) {
-    for (mut position, velocity) in &mut bullets {
-        position.0 += velocity.0;
-    }
 }
 
 fn destroy_bullets (
@@ -291,28 +308,19 @@ fn spawn_asteroid(
     ));
 }
 
-//TODO: use a grid size that I can select positions without worrying about window size
+
 fn spawn_asteroid_random(
     mut commands: Commands,
     asteroid_assets: Res<AsteroidAssets>,
     mut spawner: ResMut<SpawnGenerator>,
 ) {
     for _ in 0..ASTEROID_VARIANTS{
-        let position = Vec2::new(spawner.rng.f32_normalized()*200.0, spawner.rng.f32_normalized()*200.0);
+        let position = Vec2::new(spawner.rng.f32_normalized()*10.0, spawner.rng.f32_normalized()*10.0);
         let velocity = Vec2::new(spawner.rng.f32_normalized()*3.0, spawner.rng.f32_normalized()*3.0);
         let scale = spawner.rng.f32()*5.0 + 45.0;
         let angular_velocity = spawner.rng.f32_normalized()*0.01;
 
         spawn_asteroid(&mut commands, &asteroid_assets, &mut spawner, position, velocity, angular_velocity, scale);
-    }
-}
-
-fn move_asteroids(
-    mut asteroids: Query<(&mut Position, &mut Rotation, &Velocity, &AngularVelocity), With<Asteroid>>
-) {
-    for (mut position, mut rotation, velocity, angular_velocity) in &mut asteroids {
-        position.0 += velocity.0;
-        rotation.0 += angular_velocity.0;
     }
 }
 
@@ -401,9 +409,8 @@ fn spawn_camera(mut commands: Commands) {
         .insert(Camera2d);
 }
 
-
 // TODO: grid should extend a little be beyond the window to avoid pop-in
-const GRID_SIZE: f32 = 1.;
+const GRID_SIZE: f32 = 10.;
 fn project_positions(
     mut positionables: Query<(&mut Transform, &Position, &Rotation, &Scale)>,
     window: Query<&Window>,
@@ -412,17 +419,16 @@ fn project_positions(
         let window_height = window.resolution.height();
         let window_width = window.resolution.width();
 
-        //let window_aspect = window_width / window_height;
+        let grid_to_height = window_height / GRID_SIZE;
+        let grid_to_width = window_width / GRID_SIZE;
 
         for (mut transform, position, rotation, scale) in &mut positionables {
             let mut new_position = position.0;
-            // Do we want to scale to window so multiple players will see the same thing?
-            // or keep the positions consistent on an absolute and just consider the wraparound to be a projection.
-            // wraparound as projection is a nice visual, but makes collision strange.
-            new_position *= GRID_SIZE;
+            new_position.x *= grid_to_width;
+            new_position.y *= grid_to_height;
             //wrap objects around the screen
-            new_position.x = wrap_around(new_position.x, -window_width/2., window_width);
-            new_position.y = wrap_around(new_position.y, -window_height/2., window_height);
+            new_position.x = wrap_around(new_position.x, -window_width/2.0, window_width);
+            new_position.y = wrap_around(new_position.y, -window_height/2.0, window_height);
             //println!("new_position.y: {}", new_position.y);
             transform.translation = new_position.extend(0.);
 
@@ -450,17 +456,17 @@ fn handle_player_input(
 ) {
     if let Ok((mut acceleration, mut angular_acceleration, position, rotation, mut last_shot_time)) = ship.get_single_mut() {
         if keyboard_input.pressed(KeyCode::ArrowUp) {
-            acceleration.0.y = 1.;
+            acceleration.0.y = SHIP_SPEED;
         } else if keyboard_input.pressed(KeyCode::ArrowDown) {
-            acceleration.0.y = -1.;
+            acceleration.0.y = -SHIP_SPEED;
         } else {
             acceleration.0.y = 0.;
         }
 
         if keyboard_input.pressed(KeyCode::ArrowRight) {
-            angular_acceleration.0 = -1.;
+            angular_acceleration.0 = -SHIP_SPEED_ANGULAR;
         } else if keyboard_input.pressed(KeyCode::ArrowLeft) {
-            angular_acceleration.0 = 1.;
+            angular_acceleration.0 = SHIP_SPEED_ANGULAR;
         } else {
             angular_acceleration.0 = 0.;
         }
@@ -500,9 +506,8 @@ impl Plugin for AsteroidsPlugin {
         app.add_systems(Update, (
             handle_player_input,
             //spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
+            move_obj,
             move_ship,
-            move_bullets,
-            move_asteroids,
             destroy_bullets,
         ).in_set(ObjectUpdate));
         app.add_systems(Update, (
