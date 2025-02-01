@@ -69,14 +69,24 @@ fn collision_bounce(
 
 }
 
+fn collide (
+    pos1: Vec2,
+    pos2: Vec2,
+    r1: f32,
+    r2: f32,
+) -> (Vec2, f32, f32) {
+    let dir = pos2 - pos1;
+    let dist = dir.length().abs();
+    let collide_dist = r1 + r2;
+    (dir, dist, collide_dist)
+}
+
 fn collisions_asteroids (
     mut bodies: Query<(&mut Position, &mut Velocity, &RigidBody), With<Asteroid>>,
 ) {
     let mut combinations = bodies.iter_combinations_mut();
     while let Some([(mut pos1, mut vel1, body1), (mut pos2, mut vel2, body2)]) = combinations.fetch_next() {
-        let dir = pos2.0 - pos1.0;
-        let dist = dir.length().abs();
-        let collide_dist = body1.radius + body2.radius;
+        let (dir, dist, collide_dist) = collide(pos1.0, pos2.0, body1.radius, body2.radius);
 
         if dist < collide_dist {
             let normal = dir.normalize();
@@ -90,6 +100,20 @@ fn collisions_asteroids (
     }
 }
 
+fn collisions_ship(
+    mut commands: Commands,
+    mut ships: Query<(Entity, &Position, &RigidBody), With<Ship>>,
+    asteroids: Query<(&Position, &RigidBody), With<Asteroid>>,
+) {
+    for(ship_entity, ship_pos, ship_body) in &ships {
+        for(ast_pos, ast_body) in &asteroids {
+            let (dir, dist, collide_dist) = collide(ship_pos.0, ast_pos.0, ship_body.radius, ast_body.radius);
+            if dist < collide_dist {
+                commands.entity(ship_entity).despawn();
+            }
+        }
+    }
+}
 const SHIP_SPEED: f32 = 2.0;
 const SHIP_DAMPING: f32 = 1.0;
 
@@ -112,6 +136,7 @@ struct ShipBundle {
     angular_acceleration: AngularAcceleration,
     angular_damping: AngularDamping,
     last_shot: TimeStamp,
+    rigid_body: RigidBody
 }
 
 impl ShipBundle {
@@ -127,7 +152,8 @@ impl ShipBundle {
             angular_velocity: AngularVelocity(0.0),
             angular_acceleration: AngularAcceleration(0.0),
             angular_damping: AngularDamping(SHIP_DAMPING_ANGULAR),
-            last_shot: TimeStamp(Duration::ZERO)
+            last_shot: TimeStamp(Duration::ZERO),
+            rigid_body: RigidBody{radius: 0.1, mass: 2.0}
         }
     }
 }
@@ -566,6 +592,7 @@ impl Plugin for AsteroidsPlugin {
             move_ship,
             wrap_obj,
             collisions_asteroids,
+            collisions_ship,
             destroy_bullets,
         ).in_set(ObjectUpdate));
         app.add_systems(Update, (
