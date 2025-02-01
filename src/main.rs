@@ -102,7 +102,7 @@ fn collisions_asteroids (
 
 fn collisions_ship(
     mut commands: Commands,
-    mut ships: Query<(Entity, &Position, &RigidBody), With<Ship>>,
+    ships: Query<(Entity, &Position, &RigidBody), With<Ship>>,
     asteroids: Query<(&Position, &RigidBody), With<Asteroid>>,
 ) {
     for(ship_entity, ship_pos, ship_body) in &ships {
@@ -114,6 +114,23 @@ fn collisions_ship(
         }
     }
 }
+
+fn collisions_bullets(
+    mut commands: Commands,
+    bullets: Query<(Entity, &Position, &RigidBody), With<Bullet>>,
+    asteroids: Query<(Entity, &Position, &RigidBody), With<Asteroid>>,
+) {
+    for(bul_entity, bul_pos, bul_body) in &bullets {
+        for(ast_entity, ast_pos, ast_body) in &asteroids {
+            let (dir, dist, collide_dist) = collide(bul_pos.0, ast_pos.0, bul_body.radius, ast_body.radius);
+            if dist < collide_dist {
+                commands.entity(bul_entity).despawn();
+                commands.entity(ast_entity).despawn();
+            }
+        }
+    }
+}
+
 const SHIP_SPEED: f32 = 2.0;
 const SHIP_DAMPING: f32 = 1.0;
 
@@ -231,6 +248,7 @@ struct BulletBundle {
     angular_velocity: AngularVelocity,
     scale: Scale,
     spawn_time: TimeStamp,
+    rigid_body: RigidBody,
 }
 
 impl BulletBundle {
@@ -243,6 +261,7 @@ impl BulletBundle {
             scale: Scale(1.0),
             velocity: Velocity(Rot2::radians(rotation) * Vec2::new(0.0, BULLET_SPEED)),
             spawn_time: TimeStamp(spawn_time),
+            rigid_body: RigidBody{radius: 0.02, mass: 2.0}
         }
     }
 }
@@ -593,6 +612,7 @@ impl Plugin for AsteroidsPlugin {
             wrap_obj,
             collisions_asteroids,
             collisions_ship,
+            collisions_bullets,
             destroy_bullets,
         ).in_set(ObjectUpdate));
         app.add_systems(Update, (
