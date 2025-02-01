@@ -1,5 +1,6 @@
 use bevy::input::keyboard::Key;
-use bevy::{prelude::*, scene};
+use bevy::math::NormedVectorSpace;
+use bevy::{prelude::*, scene, window};
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::time::common_conditions::on_timer;
@@ -42,7 +43,52 @@ struct Damping(f32);
 struct Scale(f32);
 
 #[derive(Component)]
-struct Shape(Vec2);
+struct RigidBody{
+    radius: f32,
+    mass: f32,
+}
+
+fn collision_bounce(
+    vel1: Vec2,
+    vel2: Vec2,
+    normal: Vec2,
+    mass1: f32,
+    mass2: f32,
+) -> (Vec2, Vec2) {
+    let tangent = Vec2::new(-normal.y, normal.x);
+    
+    let vel1_normal = vel1.dot(normal);
+    let vel1_tangent = vel1.dot(tangent);
+    let vel2_normal = vel2.dot(normal);
+    let vel2_tangent = vel2.dot(tangent);
+
+    let vel1_normal_new = (vel1_normal * (mass1 - mass2) + 2.0 * mass2* vel2_normal) / (mass1 + mass2);
+    let vel2_normal_new = (vel2_normal * (mass2 - mass1) + 2.0 * mass1 * vel1_normal) / (mass1 + mass2);
+
+    ((tangent * vel1_tangent) + (normal * vel1_normal_new), (tangent * vel2_tangent) + (normal * vel2_normal_new))
+
+}
+
+fn collisions_asteroids (
+    mut bodies: Query<(&mut Position, &mut Velocity, &RigidBody), With<Asteroid>>,
+) {
+    let mut combinations = bodies.iter_combinations_mut();
+    while let Some([(mut pos1, mut vel1, body1), (mut pos2, mut vel2, body2)]) = combinations.fetch_next() {
+        let dir = pos2.0 - pos1.0;
+        let dist = dir.length().abs();
+        let collide_dist = body1.radius + body2.radius;
+
+        if dist < collide_dist {
+            let normal = dir.normalize();
+            (vel1.0, vel2.0) = collision_bounce(vel1.0, vel2.0, normal, body1.mass, body2.mass);
+
+            let depth = collide_dist - dist;
+            let correction = normal * (depth * 0.5);
+            pos1.0 -= correction;
+            pos2.0 += correction;
+        }
+    }
+}
 
 const SHIP_SPEED: f32 = 2.0;
 const SHIP_DAMPING: f32 = 1.0;
@@ -56,7 +102,6 @@ struct Ship;
 #[derive(Bundle)]
 struct ShipBundle {
     ship: Ship,
-    shape: Shape,
     position: Position,
     rotation: Rotation,
     scale: Scale,
@@ -73,7 +118,6 @@ impl ShipBundle {
     fn new(x: f32, y: f32) -> Self {
         Self {
             ship: Ship,
-            shape: Shape(Vec2::new(10., 10.)),
             position: Position(Vec2::new(x, y)),
             rotation: Rotation(0.0),
             scale: Scale(10.0),
@@ -155,7 +199,6 @@ struct Bullet;
 #[derive(Bundle)]
 struct BulletBundle {
     bullet: Bullet,
-    shape: Shape,
     position: Position,
     rotation: Rotation,
     velocity: Velocity,
@@ -168,7 +211,6 @@ impl BulletBundle {
     fn new(position: Vec2, rotation: f32, spawn_time: Duration) -> Self {
         Self {
             bullet: Bullet,
-            shape: Shape(Vec2::new(4., 4.)),
             position: Position(position),
             rotation: Rotation(rotation),
             angular_velocity: AngularVelocity(0.0),
@@ -253,10 +295,11 @@ struct Asteroid;
 struct AsteroidBundle {
     asteroid: Asteroid,
     position: Position,
-    rotation: Rotation,
     velocity: Velocity,
-    scale: Scale,
+    rotation: Rotation,
     angular_velocity: AngularVelocity,
+    scale: Scale,
+    rigid_body: RigidBody,
 }
 
 impl AsteroidBundle {
@@ -264,10 +307,11 @@ impl AsteroidBundle {
         Self {
             asteroid: Asteroid,
             position: Position(position),
-            rotation: Rotation(0.0),
             velocity: Velocity(velocity),
             scale: Scale(scale),
+            rotation: Rotation(0.0),
             angular_velocity: AngularVelocity(angular_velocity),
+            rigid_body: RigidBody{radius: scale*0.012, mass: 2.0},
         }
     }
 }
@@ -314,11 +358,11 @@ fn spawn_asteroid_random(
     asteroid_assets: Res<AsteroidAssets>,
     mut spawner: ResMut<SpawnGenerator>,
 ) {
-    for _ in 0..ASTEROID_VARIANTS{
-        let position = Vec2::new(spawner.rng.f32_normalized()*10.0, spawner.rng.f32_normalized()*10.0);
+    for _ in 0..5{
+        let position = Vec2::new(spawner.rng.f32_normalized()*GRID_SIZE*0.5, spawner.rng.f32_normalized()*GRID_SIZE*0.5);
         let velocity = Vec2::new(spawner.rng.f32_normalized()*3.0, spawner.rng.f32_normalized()*3.0);
         let scale = spawner.rng.f32()*5.0 + 45.0;
-        let angular_velocity = spawner.rng.f32_normalized()*0.01;
+        let angular_velocity = spawner.rng.f32_normalized()*1.0;
 
         spawn_asteroid(&mut commands, &asteroid_assets, &mut spawner, position, velocity, angular_velocity, scale);
     }
@@ -329,11 +373,11 @@ fn create_astroid_mesh(spawner: &mut ResMut<SpawnGenerator>) -> Mesh {
     // create semi-random circle
     let num_verts = rng.usize(8..12);
     let angle_step = 360.0/num_verts as f32;
-    let angle_range = angle_step * 0.2;
+    let angle_range = angle_step * 0.1;
     let mut positions = Vec::with_capacity(num_verts);
     
     for i in 0..num_verts {
-        let radius = rng.f32()*0.5 + 1.0;
+        let radius = rng.f32_normalized()*0.1 + 1.0;
         let angle = rng.f32_normalized()*(i as f32 * angle_range) + (i as f32 * angle_step);
         let rotator = Rot2::degrees(angle);
         let point = rotator * Vec2::new(0.0, radius);
@@ -427,8 +471,8 @@ fn project_positions(
             new_position.x *= grid_to_width;
             new_position.y *= grid_to_height;
             //wrap objects around the screen
-            new_position.x = wrap_around(new_position.x, -window_width/2.0, window_width);
-            new_position.y = wrap_around(new_position.y, -window_height/2.0, window_height);
+            //new_position.x = wrap_around(new_position.x, -window_width/2.0, window_width);
+            //new_position.y = wrap_around(new_position.y, -window_height/2.0, window_height);
             //println!("new_position.y: {}", new_position.y);
             transform.translation = new_position.extend(0.);
 
@@ -437,6 +481,18 @@ fn project_positions(
             transform.scale = Vec3::new(scale.0, scale.0, scale.0)
         }
     }
+}
+
+fn wrap_obj(
+    mut obj: Query<&mut Position>,
+
+) {
+    let grid_extends = 0.5;
+    for (mut position) in &mut obj {
+        position.0.x = wrap_around(position.0.x, -GRID_SIZE*0.5 - grid_extends, GRID_SIZE + (2.0*grid_extends));
+        position.0.y = wrap_around(position.0.y, -GRID_SIZE*0.5 - grid_extends, GRID_SIZE + (2.0*grid_extends));
+    }
+
 }
 
 fn wrap_around(value: f32, min_value: f32, range: f32) -> f32 {
@@ -508,6 +564,8 @@ impl Plugin for AsteroidsPlugin {
             //spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
             move_obj,
             move_ship,
+            wrap_obj,
+            collisions_asteroids,
             destroy_bullets,
         ).in_set(ObjectUpdate));
         app.add_systems(Update, (
