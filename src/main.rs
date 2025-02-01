@@ -232,7 +232,6 @@ struct AsteroidAssets {
 #[derive(Component)]
 struct Asteroid;
 
-// TODO: add scale. Needs update to project positions
 #[derive(Bundle)]
 struct AsteroidBundle {
     asteroid: Asteroid,
@@ -243,7 +242,6 @@ struct AsteroidBundle {
     angular_velocity: AngularVelocity,
 }
 
-// TODO: angular_velocity seeded random
 impl AsteroidBundle {
     fn new(position: Vec2, velocity: Vec2, angular_velocity: f32, scale: f32,) -> Self {
         Self {
@@ -294,7 +292,6 @@ fn spawn_asteroid(
 }
 
 //TODO: use a grid size that I can select positions without worrying about window size
-//TODO: use a shared seed so we don't get the same velocity every time
 fn spawn_asteroid_random(
     mut commands: Commands,
     asteroid_assets: Res<AsteroidAssets>,
