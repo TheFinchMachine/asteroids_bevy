@@ -13,7 +13,7 @@ const WORLD_SEED: u64 = 1024;
 #[derive(Component)]
 struct TimeStamp(Duration);
 
-// don't use Rot2 as it is effectivly a 2d quat. 2d rots don't suffer from gimbal lock, so we don't need that complexity.
+// don't use Rot2 as it is effectively a 2d quat. 2d rots don't suffer from gimbal lock, so we don't need that complexity.
 #[derive(Component)]
 struct Rotation(f32);
 
@@ -33,6 +33,9 @@ struct Velocity(Vec2);
 struct Acceleration(Vec2);
 
 #[derive(Component)]
+struct Scale(f32);
+
+#[derive(Component)]
 struct Shape(Vec2);
 
 const SHIP_SPEED: f32 = 0.3;
@@ -49,9 +52,10 @@ struct ShipBundle {
     ship: Ship,
     shape: Shape,
     position: Position,
+    rotation: Rotation,
+    scale: Scale,
     velocity: Velocity,
     acceleration: Acceleration,
-    rotation: Rotation,
     angular_velocity: AngularVelocity,
     angular_acceleration: AngularAcceleration,
     last_shot: TimeStamp,
@@ -63,9 +67,10 @@ impl ShipBundle {
             ship: Ship,
             shape: Shape(Vec2::new(10., 10.)),
             position: Position(Vec2::new(x, y)),
+            rotation: Rotation(0.0),
+            scale: Scale(10.0),
             velocity: Velocity(Vec2::new(0., 0.)),
             acceleration: Acceleration(Vec2::new(0., 0.)),
-            rotation: Rotation(0.0),
             angular_velocity: AngularVelocity(0.0),
             angular_acceleration: AngularAcceleration(0.0),
             last_shot: TimeStamp(Duration::ZERO)
@@ -89,7 +94,7 @@ fn spawn_ship(
         ShipBundle::new(0., 0.),
         Mesh2d(mesh),
         MeshMaterial2d(material),
-        Transform::from_scale(Vec3::new(10., 10., 10.)),
+        Transform::default(),
     ));
 }
 
@@ -131,6 +136,7 @@ struct BulletBundle {
     position: Position,
     rotation: Rotation,
     velocity: Velocity,
+    scale: Scale,
     spawn_time: TimeStamp,
 }
 
@@ -141,6 +147,7 @@ impl BulletBundle {
             shape: Shape(Vec2::new(4., 4.)),
             position: Position(position),
             rotation: Rotation(rotation),
+            scale: Scale(1.0),
             velocity: Velocity(Rot2::radians(rotation) * Vec2::new(0.0, BULLET_SPEED)),
             spawn_time: TimeStamp(spawn_time),
         }
@@ -232,18 +239,20 @@ struct AsteroidBundle {
     position: Position,
     rotation: Rotation,
     velocity: Velocity,
+    scale: Scale,
     angular_velocity: AngularVelocity,
 }
 
 // TODO: angular_velocity seeded random
 impl AsteroidBundle {
-    fn new(position: Vec2, velocity: Vec2) -> Self {
+    fn new(position: Vec2, velocity: Vec2, angular_velocity: f32, scale: f32,) -> Self {
         Self {
             asteroid: Asteroid,
             position: Position(position),
             rotation: Rotation(0.0),
             velocity: Velocity(velocity),
-            angular_velocity: AngularVelocity(0.0)
+            scale: Scale(scale),
+            angular_velocity: AngularVelocity(angular_velocity),
         }
     }
 }
@@ -272,13 +281,15 @@ fn spawn_asteroid(
     spawner: &mut ResMut<SpawnGenerator>,
     position: Vec2,
     velocity: Vec2,
+    angular_velocity: f32,
+    scale: f32,
 ) {
     let mesh = spawner.rng.usize(0..ASTEROID_VARIANTS);
     commands.spawn((
-        AsteroidBundle::new(position, velocity),
+        AsteroidBundle::new(position, velocity, angular_velocity, scale),
         Mesh2d(asteroid_assets.meshes[mesh].clone()),
         MeshMaterial2d(asteroid_assets.material.clone()),
-        Transform::from_scale(Vec3::new(10., 10., 10.)),
+        Transform::default(),
     ));
 }
 
@@ -292,8 +303,10 @@ fn spawn_asteroid_random(
     for _ in 0..ASTEROID_VARIANTS{
         let position = Vec2::new(spawner.rng.f32_normalized()*200.0, spawner.rng.f32_normalized()*200.0);
         let velocity = Vec2::new(spawner.rng.f32_normalized()*3.0, spawner.rng.f32_normalized()*3.0);
+        let scale = spawner.rng.f32()*5.0 + 45.0;
+        let angular_velocity = spawner.rng.f32_normalized()*0.01;
 
-        spawn_asteroid(&mut commands, &asteroid_assets, &mut spawner, position, velocity);
+        spawn_asteroid(&mut commands, &asteroid_assets, &mut spawner, position, velocity, angular_velocity, scale);
     }
 }
 
@@ -395,7 +408,7 @@ fn spawn_camera(mut commands: Commands) {
 // TODO: grid should extend a little be beyond the window to avoid pop-in
 const GRID_SIZE: f32 = 1.;
 fn project_positions(
-    mut positionables: Query<(&mut Transform, &Position, &Rotation)>,
+    mut positionables: Query<(&mut Transform, &Position, &Rotation, &Scale)>,
     window: Query<&Window>,
 ) {
     if let Ok(window) = window.get_single() {
@@ -404,7 +417,7 @@ fn project_positions(
 
         //let window_aspect = window_width / window_height;
 
-        for (mut transform, position, rotation) in &mut positionables {
+        for (mut transform, position, rotation, scale) in &mut positionables {
             let mut new_position = position.0;
             // Do we want to scale to window so multiple players will see the same thing?
             // or keep the positions consistent on an absolute and just consider the wraparound to be a projection.
@@ -417,6 +430,8 @@ fn project_positions(
             transform.translation = new_position.extend(0.);
 
             transform.rotation = Quat::from_rotation_z(rotation.0);
+
+            transform.scale = Vec3::new(scale.0, scale.0, scale.0)
         }
     }
 }
