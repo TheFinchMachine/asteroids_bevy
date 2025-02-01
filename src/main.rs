@@ -1,5 +1,3 @@
-use bevy::input::keyboard::Key;
-use bevy::math::NormedVectorSpace;
 use bevy::{prelude::*, scene, window};
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
@@ -416,14 +414,13 @@ fn spawn_asteroid_random(
     asteroid_assets: Res<AsteroidAssets>,
     mut spawner: ResMut<SpawnGenerator>,
 ) {
-    for _ in 0..5{
-        let position = Vec2::new(spawner.rng.f32_normalized()*GRID_SIZE*0.5, spawner.rng.f32_normalized()*GRID_SIZE*0.5);
-        let velocity = Vec2::new(spawner.rng.f32_normalized()*3.0, spawner.rng.f32_normalized()*3.0);
-        let scale = spawner.rng.f32()*5.0 + 45.0;
-        let angular_velocity = spawner.rng.f32_normalized()*1.0;
+    let position = Vec2::new(spawner.rng.f32_normalized()*GRID_SIZE*0.5, spawner.rng.f32_normalized()*GRID_SIZE*0.5);
+    let velocity = Vec2::new(spawner.rng.f32_normalized()*3.0, spawner.rng.f32_normalized()*3.0);
+    let scale = spawner.rng.f32()*5.0 + 45.0;
+    let angular_velocity = spawner.rng.f32_normalized()*1.0;
 
-        spawn_asteroid(&mut commands, &asteroid_assets, &mut spawner, position, velocity, angular_velocity, scale);
-    }
+    spawn_asteroid(&mut commands, &asteroid_assets, &mut spawner, position, velocity, angular_velocity, scale);
+
 }
 
 fn create_astroid_mesh(spawner: &mut ResMut<SpawnGenerator>) -> Mesh {
@@ -529,9 +526,6 @@ fn project_positions(
             new_position.x *= grid_to_width;
             new_position.y *= grid_to_height;
             //wrap objects around the screen
-            //new_position.x = wrap_around(new_position.x, -window_width/2.0, window_width);
-            //new_position.y = wrap_around(new_position.y, -window_height/2.0, window_height);
-            //println!("new_position.y: {}", new_position.y);
             transform.translation = new_position.extend(0.);
 
             transform.rotation = Quat::from_rotation_z(rotation.0);
@@ -546,7 +540,7 @@ fn wrap_obj(
 
 ) {
     let grid_extends = 0.5;
-    for (mut position) in &mut obj {
+    for mut position in &mut obj {
         position.0.x = wrap_around(position.0.x, -GRID_SIZE*0.5 - grid_extends, GRID_SIZE + (2.0*grid_extends));
         position.0.y = wrap_around(position.0.y, -GRID_SIZE*0.5 - grid_extends, GRID_SIZE + (2.0*grid_extends));
     }
@@ -619,7 +613,7 @@ impl Plugin for AsteroidsPlugin {
         ));
         app.add_systems(Update, (
             handle_player_input,
-            //spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
+            spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
             move_obj,
             move_ship,
             wrap_obj,
