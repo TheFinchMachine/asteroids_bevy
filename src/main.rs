@@ -118,14 +118,27 @@ fn collisions_ship(
 fn collisions_bullets(
     mut commands: Commands,
     bullets: Query<(Entity, &Position, &RigidBody), With<Bullet>>,
-    asteroids: Query<(Entity, &Position, &RigidBody), With<Asteroid>>,
+    asteroids: Query<(Entity, &Position, &Velocity, &Scale, &RigidBody), With<Asteroid>>,
+    asteroid_assets: Res<AsteroidAssets>,
+    mut spawner: ResMut<SpawnGenerator>,
 ) {
     for(bul_entity, bul_pos, bul_body) in &bullets {
-        for(ast_entity, ast_pos, ast_body) in &asteroids {
-            let (dir, dist, collide_dist) = collide(bul_pos.0, ast_pos.0, bul_body.radius, ast_body.radius);
+        for(ast_entity, ast_pos, ast_vel, ast_scale, ast_body) in &asteroids {
+            let (_, dist, collide_dist) = collide(bul_pos.0, ast_pos.0, bul_body.radius, ast_body.radius);
             if dist < collide_dist {
                 commands.entity(bul_entity).despawn();
                 commands.entity(ast_entity).despawn();
+                if ast_scale.0 > 20.0 {
+                    spawn_asteroid(
+                        &mut commands,
+                        &asteroid_assets,
+                        &mut spawner,
+                        ast_pos.0,
+                        ast_vel.0, 
+                        0.0, 
+                        ast_scale.0/2.0
+                    );
+                }
             }
         }
     }
