@@ -1,4 +1,4 @@
-use bevy::{prelude::*, scene, window};
+use bevy::{prelude::*, scene, window::WindowResized};
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::time::common_conditions::on_timer;
@@ -192,7 +192,7 @@ fn spawn_ship(
     asset_server: Res<AssetServer>,
 ) {
     let mesh = asset_server.load(
-        GltfAssetLabel::Primitive { mesh: 0, primitive: 0 }.from_asset("meshes/ship.gltf")
+        GltfAssetLabel::Primitive { mesh: 0, primitive: 0 }.from_asset("meshes/ship.glb")
     );
 
     let color = Color::srgb(0.8, 0.8, 1.0);
@@ -367,7 +367,7 @@ impl AsteroidBundle {
             scale: Scale(scale),
             rotation: Rotation(0.0),
             angular_velocity: AngularVelocity(angular_velocity),
-            rigid_body: RigidBody{radius: scale*0.012, mass: 2.0},
+            rigid_body: RigidBody{radius: scale*0.01, mass: 2.0},
         }
     }
 }
@@ -408,19 +408,69 @@ fn spawn_asteroid(
     ));
 }
 
+// because coords staring in center, half height and with make much more senes
+#[derive(Resource)]
+struct Grid {
+    size: f32,
+    scale: f32,
+    extends: f32,
+    height_half: f32,
+    width_half: f32,
+}
 
+// so velocity numbers make sense
+fn grid_build(
+    mut commands: Commands,
+    window: Query<&Window>,
+) {
+    if let Ok(window) = window.get_single() {
+        let window_height = window.resolution.height();
+        let window_width = window.resolution.width();
+        let window_scale = window.resolution.scale_factor();
+
+        let size = 100.0 * window_scale;
+        commands.insert_resource(Grid {
+            size,
+            scale: window_scale,
+            extends: 0.5*window_scale,
+            height_half: window_height*0.5/size,
+            width_half: window_width*0.5/size,
+        });
+    }
+}
+
+fn grid_update(
+    width: f32,
+    height: f32,
+    grid: &mut ResMut<Grid>,
+) {
+    grid.width_half = width*0.5/grid.size;
+    grid.height_half = height*0.5/grid.size;
+}
+
+fn on_resize(
+    mut resize_reader: EventReader<WindowResized>,
+    mut grid: ResMut<Grid>,
+) {
+    for e in resize_reader.read() {
+        grid_update(e.width, e.height, &mut grid);
+    }
+}
+// spawn in edges not center
+// also spawn away from ship to make it more fair
+// and fork rng so we can have one just for spawning?
 fn spawn_asteroid_random(
     mut commands: Commands,
     asteroid_assets: Res<AsteroidAssets>,
     mut spawner: ResMut<SpawnGenerator>,
+    grid: Res<Grid>,
 ) {
-    let position = Vec2::new(spawner.rng.f32_normalized()*GRID_SIZE*0.5, spawner.rng.f32_normalized()*GRID_SIZE*0.5);
+    let position = Vec2::new(spawner.rng.f32_normalized()*grid.width_half, spawner.rng.f32_normalized()*grid.height_half);
     let velocity = Vec2::new(spawner.rng.f32_normalized()*3.0, spawner.rng.f32_normalized()*3.0);
     let scale = spawner.rng.f32()*5.0 + 45.0;
     let angular_velocity = spawner.rng.f32_normalized()*1.0;
 
     spawn_asteroid(&mut commands, &asteroid_assets, &mut spawner, position, velocity, angular_velocity, scale);
-
 }
 
 fn create_astroid_mesh(spawner: &mut ResMut<SpawnGenerator>) -> Mesh {
@@ -428,11 +478,11 @@ fn create_astroid_mesh(spawner: &mut ResMut<SpawnGenerator>) -> Mesh {
     // create semi-random circle
     let num_verts = rng.usize(8..12);
     let angle_step = 360.0/num_verts as f32;
-    let angle_range = angle_step * 0.1;
+    let angle_range = angle_step * 0.0;
     let mut positions = Vec::with_capacity(num_verts);
     
     for i in 0..num_verts {
-        let radius = rng.f32_normalized()*0.1 + 1.0;
+        let radius = rng.f32_normalized()*0.25 + 0.75;
         let angle = rng.f32_normalized()*(i as f32 * angle_range) + (i as f32 * angle_step);
         let rotator = Rot2::degrees(angle);
         let point = rotator * Vec2::new(0.0, radius);
@@ -508,41 +558,34 @@ fn spawn_camera(mut commands: Commands) {
         .insert(Camera2d);
 }
 
-// TODO: grid should extend a little be beyond the window to avoid pop-in
-const GRID_SIZE: f32 = 10.;
+// entities get bigger relative to the window when the window gets bigger
+// calculate grid size based on window size?
 fn project_positions(
     mut positionables: Query<(&mut Transform, &Position, &Rotation, &Scale)>,
-    window: Query<&Window>,
+    grid: Res<Grid>,
 ) {
-    if let Ok(window) = window.get_single() {
-        let window_height = window.resolution.height();
-        let window_width = window.resolution.width();
+    for (mut transform, position, rotation, scale) in &mut positionables {
+        let mut new_position = position.0;
+        new_position.x *= grid.size;
+        new_position.y *= grid.size;
 
-        let grid_to_height = window_height / GRID_SIZE;
-        let grid_to_width = window_width / GRID_SIZE;
+        //wrap objects around the screen
+        transform.translation = new_position.extend(0.);
 
-        for (mut transform, position, rotation, scale) in &mut positionables {
-            let mut new_position = position.0;
-            new_position.x *= grid_to_width;
-            new_position.y *= grid_to_height;
-            //wrap objects around the screen
-            transform.translation = new_position.extend(0.);
+        transform.rotation = Quat::from_rotation_z(rotation.0);
 
-            transform.rotation = Quat::from_rotation_z(rotation.0);
-
-            transform.scale = Vec3::new(scale.0, scale.0, scale.0)
-        }
+        transform.scale = Vec3::new(scale.0, scale.0, scale.0)
     }
+
 }
 
 fn wrap_obj(
     mut obj: Query<&mut Position>,
-
+    grid: Res<Grid>,
 ) {
-    let grid_extends = 0.5;
     for mut position in &mut obj {
-        position.0.x = wrap_around(position.0.x, -GRID_SIZE*0.5 - grid_extends, GRID_SIZE + (2.0*grid_extends));
-        position.0.y = wrap_around(position.0.y, -GRID_SIZE*0.5 - grid_extends, GRID_SIZE + (2.0*grid_extends));
+        position.0.x = wrap_around(position.0.x, -grid.width_half - grid.extends, grid.width_half*2.0 + (2.0*grid.extends));
+        position.0.y = wrap_around(position.0.y, -grid.height_half - grid.extends, grid.height_half*2.0 + (2.0*grid.extends));
     }
 
 }
@@ -608,6 +651,7 @@ impl Plugin for AsteroidsPlugin {
             spawn_ship,
             load_spawner,
             load_bullet,
+            grid_build,
             load_asteroids.after(load_spawner),
             spawn_asteroid_random.after(load_asteroids),
         ));
@@ -617,6 +661,7 @@ impl Plugin for AsteroidsPlugin {
             move_obj,
             move_ship,
             wrap_obj,
+            on_resize,
             collisions_asteroids,
             collisions_ship,
             collisions_bullets,
