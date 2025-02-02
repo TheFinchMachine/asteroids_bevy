@@ -465,8 +465,14 @@ fn spawn_asteroid_random(
     mut spawner: ResMut<SpawnGenerator>,
     grid: Res<Grid>,
 ) {
-    let position = Vec2::new(spawner.rng.f32_normalized()*grid.width_half, spawner.rng.f32_normalized()*grid.height_half);
-    let velocity = Vec2::new(spawner.rng.f32_normalized()*3.0, spawner.rng.f32_normalized()*3.0);
+    // spawn position offscreen inside grid extents
+    let x_dist = spawner.rng.f32_normalized()*grid.extends;
+    let y_dist = spawner.rng.f32_normalized()*grid.extends;
+    let x = if x_dist < 0.0 {x_dist - grid.width_half} else {x_dist + grid.width_half};
+    let y = if y_dist < 0.0 {y_dist - grid.height_half} else {y_dist + grid.height_half};
+    let position = Vec2::new(x, y);
+
+    let velocity = Vec2::new(spawner.rng.f32_normalized()*2.0, spawner.rng.f32_normalized()*2.0);
     let scale = spawner.rng.f32()*5.0 + 45.0;
     let angular_velocity = spawner.rng.f32_normalized()*1.0;
 
