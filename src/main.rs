@@ -149,6 +149,8 @@ fn collisions_bullets(
             if dist < collide_dist {
                 commands.entity(bul_entity).despawn();
                 commands.entity(ast_entity).despawn();
+                let av1 = spawner.rng.f32_normalized();
+                let av2 = spawner.rng.f32_normalized();
 
                 if ast_scale.0 > 25.0 {
                     spawn_asteroid_child(
@@ -157,7 +159,7 @@ fn collisions_bullets(
                         &mut spawner,
                         ast_pos.0,
                         ast_vel.0, 
-                        spawner.rng.f32_normalized(), 
+                        av1, 
                         ast_scale.0,
                         50.0
                     );
@@ -167,7 +169,7 @@ fn collisions_bullets(
                         &mut spawner,
                         ast_pos.0,
                         ast_vel.0, 
-                        spawner.rng.f32_normalized(),
+                        av2,
                         ast_scale.0,
                         -50.0
                     );
