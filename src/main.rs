@@ -46,6 +46,65 @@ struct RigidBody{
     mass: f32,
 }
 
+#[derive(Resource, Default)]
+struct Score {
+    score: u16
+}
+
+#[derive(Event)]
+struct Scored;
+
+fn update_score(
+    mut score: ResMut<Score>,
+    mut events: EventReader<Scored>
+) {
+    for _ in events.read() {
+        score.score += 1;
+    } 
+}
+
+const SCOREBOARD_FONT_SIZE: f32 = 36.0;
+const SCOREBOARD_TEXT_MARGIN: f32 = 18.0;
+
+
+#[derive(Component)]
+struct PlayerScore;
+
+fn spawn_scoreboard(mut commands: Commands, asset_server: Res<AssetServer>, window: Query<&Window>,) {
+    if let Ok(window) = window.get_single() {
+        let window_height = window.resolution.height();
+        let text_height = window_height / 2. - SCOREBOARD_TEXT_MARGIN;
+
+        let font = asset_server.load("fonts/FiraSans-Bold.ttf");
+        let text_font = TextFont {
+            font,
+            font_size: SCOREBOARD_FONT_SIZE,
+            ..default()
+        };
+
+        commands.spawn((
+            PlayerScore,
+            Text2d::new("0"),
+            text_font.clone(),
+            TextLayout::new_with_justify(JustifyText::Center),
+            Transform::from_translation(Vec3::new(0.0, text_height, 0.0)),
+            
+        ));
+    }
+}
+
+fn update_scoreboard(
+    mut player_score: Query<&mut Text2d, With<PlayerScore>>,
+    score: Res<Score>,
+) {
+    if score.is_changed() {
+        if let Ok(mut player_score) = player_score.get_single_mut() {
+            player_score.0 = score.score.to_string();
+        }
+    }
+}
+
+
 fn collision_bounce(
     vel1: Vec2,
     vel2: Vec2,
@@ -142,11 +201,13 @@ fn collisions_bullets(
     asteroids: Query<(Entity, &Position, &Velocity, &Scale, &RigidBody), With<Asteroid>>,
     asteroid_assets: Res<AsteroidAssets>,
     mut spawner: ResMut<SpawnGenerator>,
+    mut events: EventWriter<Scored>,
 ) {
     for(bul_entity, bul_pos, bul_body) in &bullets {
         for(ast_entity, ast_pos, ast_vel, ast_scale, ast_body) in &asteroids {
             let (_, dist, collide_dist) = collide(bul_pos.0, ast_pos.0, bul_body.radius, ast_body.radius);
             if dist < collide_dist {
+                events.send(Scored);
                 commands.entity(bul_entity).despawn();
                 commands.entity(ast_entity).despawn();
                 let av1 = spawner.rng.f32_normalized();
@@ -689,14 +750,17 @@ struct ObjectUpdate;
 impl Plugin for AsteroidsPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(RngPlugin::new().with_rng_seed(WORLD_SEED));
+        app.init_resource::<Score>();
+        app.add_event::<Scored>();
         app.add_systems(Startup, (
             spawn_camera,
             spawn_ship,
+            spawn_scoreboard,
             load_spawner,
             load_bullet,
             grid_build,
             load_asteroids.after(load_spawner),
-            spawn_asteroid_random.after(load_asteroids),
+            //spawn_asteroid_random.after(load_asteroids),
         ));
         app.add_systems(Update, (
             handle_player_input,
@@ -709,6 +773,8 @@ impl Plugin for AsteroidsPlugin {
             collisions_ship,
             collisions_bullets,
             destroy_bullets,
+            update_score.after(collisions_bullets),
+            update_scoreboard.after(collisions_bullets)
         ).in_set(ObjectUpdate));
         app.add_systems(Update, (
             project_positions.after(ObjectUpdate)
@@ -718,7 +784,13 @@ impl Plugin for AsteroidsPlugin {
 
 fn main() {
     App::new()
-    .add_plugins(DefaultPlugins)
+    .add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            fit_canvas_to_parent: true,
+            ..default()
+        }),
+        ..default()
+    }))
     .add_plugins(AsteroidsPlugin)
     .run();
 }
