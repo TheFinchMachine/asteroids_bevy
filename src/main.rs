@@ -113,6 +113,29 @@ fn collisions_ship(
     }
 }
 
+fn spawn_asteroid_child(
+    mut commands: &mut Commands,
+    asteroid_assets: &Res<AsteroidAssets>,
+    mut spawner: &mut ResMut<SpawnGenerator>,
+    position: Vec2,
+    velocity: Vec2,
+    angular_velocity: f32,
+    scale: f32,
+    offset: f32
+) {
+    let vel_len = velocity.length();
+    let vel_offset1 = Rot2::degrees(offset)*velocity.normalize();
+    spawn_asteroid(
+        commands,
+        asteroid_assets,
+        spawner,
+        position+ vel_offset1*scale*0.001,
+        vel_offset1*vel_len*0.75, 
+        angular_velocity, 
+        scale/1.5
+    );
+}
+
 fn collisions_bullets(
     mut commands: Commands,
     bullets: Query<(Entity, &Position, &RigidBody), With<Bullet>>,
@@ -126,15 +149,27 @@ fn collisions_bullets(
             if dist < collide_dist {
                 commands.entity(bul_entity).despawn();
                 commands.entity(ast_entity).despawn();
-                if ast_scale.0 > 20.0 {
-                    spawn_asteroid(
+
+                if ast_scale.0 > 25.0 {
+                    spawn_asteroid_child(
                         &mut commands,
                         &asteroid_assets,
                         &mut spawner,
                         ast_pos.0,
                         ast_vel.0, 
                         0.0, 
-                        ast_scale.0/2.0
+                        ast_scale.0,
+                        50.0
+                    );
+                    spawn_asteroid_child(
+                        &mut commands,
+                        &asteroid_assets,
+                        &mut spawner,
+                        ast_pos.0,
+                        ast_vel.0, 
+                        0.0, 
+                        ast_scale.0,
+                        -50.0
                     );
                 }
             }
@@ -602,7 +637,7 @@ fn wrap_around(value: f32, min_value: f32, range: f32) -> f32 {
     ((value - min_value) % range + range) % range + min_value
 }
 
-const SHOT_SPACING: Duration = Duration::from_millis(250);
+const SHOT_SPACING: Duration = Duration::from_millis(350);
 
 fn handle_player_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
