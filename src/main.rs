@@ -157,7 +157,7 @@ fn collisions_bullets(
                         &mut spawner,
                         ast_pos.0,
                         ast_vel.0, 
-                        0.0, 
+                        spawner.rng.f32_normalized(), 
                         ast_scale.0,
                         50.0
                     );
@@ -167,7 +167,7 @@ fn collisions_bullets(
                         &mut spawner,
                         ast_pos.0,
                         ast_vel.0, 
-                        0.0, 
+                        spawner.rng.f32_normalized(),
                         ast_scale.0,
                         -50.0
                     );
@@ -371,7 +371,7 @@ fn load_spawner(
     });
 }
 
-const ASTEROID_VARIANTS: usize = 10;
+const ASTEROID_VARIANTS: usize = 100;
 
 #[derive(Resource)]
 struct AsteroidAssets {
