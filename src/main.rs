@@ -23,9 +23,6 @@ struct AngularVelocity(f32);
 struct AngularAcceleration(f32);
 
 #[derive(Component)]
-struct AngularDamping(f32);
-
-#[derive(Component)]
 struct Position(Vec2);
 
 #[derive(Component)]
@@ -33,9 +30,6 @@ struct Velocity(Vec2);
 
 #[derive(Component)]
 struct Acceleration(Vec2);
-
-#[derive(Component)]
-struct Damping(f32);
 
 #[derive(Component)]
 struct Scale(f32);
@@ -257,10 +251,8 @@ struct ShipBundle {
     scale: Scale,
     velocity: Velocity,
     acceleration: Acceleration,
-    damping: Damping,
     angular_velocity: AngularVelocity,
     angular_acceleration: AngularAcceleration,
-    angular_damping: AngularDamping,
     last_shot: TimeStamp,
     rigid_body: RigidBody
 }
@@ -274,10 +266,8 @@ impl ShipBundle {
             scale: Scale(10.0),
             velocity: Velocity(Vec2::new(0., 0.)),
             acceleration: Acceleration(Vec2::new(0., 0.)),
-            damping: Damping(SHIP_DAMPING),
             angular_velocity: AngularVelocity(0.0),
             angular_acceleration: AngularAcceleration(0.0),
-            angular_damping: AngularDamping(SHIP_DAMPING_ANGULAR),
             last_shot: TimeStamp(Duration::ZERO),
             rigid_body: RigidBody{radius: 0.1, mass: 2.0}
         }
@@ -506,7 +496,7 @@ fn spawn_asteroid(
     ));
 }
 
-// because coords staring in center, half height and with make much more senes
+// because coords staring in center, half height and with make much more sense
 #[derive(Resource)]
 struct Grid {
     size: f32,
@@ -554,9 +544,7 @@ fn on_resize(
         grid_update(e.width, e.height, &mut grid);
     }
 }
-// spawn in edges not center
-// also spawn away from ship to make it more fair
-// and fork rng so we can have one just for spawning?
+
 fn spawn_asteroid_random(
     mut commands: Commands,
     asteroid_assets: Res<AsteroidAssets>,
@@ -662,8 +650,6 @@ fn spawn_camera(mut commands: Commands) {
         .insert(Camera2d);
 }
 
-// entities get bigger relative to the window when the window gets bigger
-// calculate grid size based on window size?
 fn project_positions(
     mut positionables: Query<(&mut Transform, &Position, &Rotation, &Scale)>,
     grid: Res<Grid>,
