@@ -31,6 +31,12 @@ pub struct Velocity(pub Vec2);
 pub struct Acceleration(pub Vec2);
 
 #[derive(Component)]
+pub struct Damping(pub f32);
+
+#[derive(Component)]
+pub struct AngularDamping(pub f32);
+
+#[derive(Component)]
 pub struct Scale(pub f32);
 
 #[derive(Component)]
@@ -188,6 +194,16 @@ fn update_angular_velocity(
         angular_velocity.0 += angular_acceleration.0 * time.delta_secs();
     }
 }
+fn damping(time: Res<Time>, mut obj: Query<(&mut Velocity, &Damping)>) {
+    for (mut velocity, damping) in obj.iter_mut() {
+        velocity.0 *= (-damping.0 * time.delta_secs()).exp();
+    }
+}
+fn damping_angular(time: Res<Time>, mut obj: Query<(&mut AngularVelocity, &AngularDamping)>) {
+    for (mut angular_velocity, damping) in obj.iter_mut() {
+        angular_velocity.0 *= (-damping.0 * time.delta_secs()).exp();
+    }
+}
 
 pub struct BodiesPlugin;
 
@@ -195,13 +211,13 @@ impl Plugin for BodiesPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (update_velocity, update_position)
+            (update_velocity, update_position, damping)
                 .chain()
                 .in_set(InGameSet::EntityUpdates),
         );
         app.add_systems(
             Update,
-            (update_angular_velocity, update_rotation)
+            (update_angular_velocity, update_rotation, damping_angular)
                 .chain()
                 .in_set(InGameSet::EntityUpdates),
         );

@@ -19,8 +19,10 @@ struct ShipBundle {
     scale: Scale,
     velocity: Velocity,
     acceleration: Acceleration,
+    damping: Damping,
     angular_velocity: AngularVelocity,
     angular_acceleration: AngularAcceleration,
+    angular_damping: AngularDamping,
     last_shot: TimeStamp,
     rigid_body: RigidBody,
 }
@@ -34,8 +36,10 @@ impl ShipBundle {
             scale: Scale(10.0),
             velocity: Velocity(Vec2::new(0., 0.)),
             acceleration: Acceleration(Vec2::new(0., 0.)),
+            damping: Damping(SHIP_DAMPING),
             angular_velocity: AngularVelocity(0.0),
             angular_acceleration: AngularAcceleration(0.0),
+            angular_damping: AngularDamping(SHIP_DAMPING_ANGULAR),
             last_shot: TimeStamp(Duration::ZERO),
             rigid_body: RigidBody {
                 radius: 0.1,
@@ -68,7 +72,7 @@ pub fn spawn_ship(
         Transform::default(),
     ));
 }
-/*
+
 pub fn move_ship(
     time: Res<Time>,
     mut ship: Query<
@@ -105,4 +109,3 @@ pub fn move_ship(
         velocity.0 *= (-SHIP_DAMPING * time.delta_secs()).exp();
     }
 }
-*/
