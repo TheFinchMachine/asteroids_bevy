@@ -32,15 +32,13 @@ struct ObjectUpdate;
 impl Plugin for AsteroidsPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(RngPlugin::new().with_rng_seed(WORLD_SEED));
-        app.init_resource::<Score>();
-        app.add_event::<Scored>();
+        app.add_plugins(ScorePlugin);
         app.init_state::<GameState>();
         app.add_systems(
             Startup,
             (
                 spawn_camera,
                 spawn_ship,
-                spawn_scoreboard,
                 load_spawner,
                 load_bullet,
                 grid_build,
@@ -62,8 +60,6 @@ impl Plugin for AsteroidsPlugin {
                 collisions_ship,
                 collisions_bullets,
                 destroy_bullets,
-                update_score.after(collisions_bullets),
-                update_scoreboard.after(collisions_bullets),
             )
                 .in_set(ObjectUpdate)
                 .run_if(in_state(GameState::InGame)),
