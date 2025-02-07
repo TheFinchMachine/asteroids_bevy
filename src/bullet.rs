@@ -1,4 +1,4 @@
-use crate::bodies::*;
+use crate::{bodies::*, schedule::InGameSet};
 use bevy::prelude::*;
 use std::time::Duration;
 
@@ -44,7 +44,7 @@ impl BulletBundle {
     }
 }
 
-pub fn load_bullet(
+fn load_bullet(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -58,6 +58,8 @@ pub fn load_bullet(
     commands.insert_resource(BulletAssets { mesh, material })
 }
 
+// TODO! switch to spawning bullets with an event
+// event chaining is fine, as long as you schedule them correctly
 pub fn spawn_bullet(
     commands: &mut Commands,
     bullet_assets: &Res<BulletAssets>,
@@ -73,7 +75,7 @@ pub fn spawn_bullet(
     ));
 }
 
-pub fn destroy_bullets(
+fn destroy_bullets(
     bullets: Query<(Entity, &TimeStamp), With<Bullet>>,
     time: Res<Time>,
     mut commands: Commands,
@@ -83,5 +85,14 @@ pub fn destroy_bullets(
         if time_elapsed - spawn_time.0 > BULLET_LIFETIME {
             commands.entity(entity).despawn();
         }
+    }
+}
+
+pub struct BulletPlugin;
+
+impl Plugin for BulletPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, load_bullet);
+        app.add_systems(Update, (destroy_bullets).in_set(InGameSet::DespawnEntities));
     }
 }

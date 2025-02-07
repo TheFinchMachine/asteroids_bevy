@@ -44,12 +44,12 @@ impl Plugin for AsteroidsPlugin {
         app.add_plugins(Control2dPlugin);
         app.add_plugins(StatePlugin);
         app.add_plugins(GridPlugin);
+        app.add_plugins(BulletPlugin);
 
         app.add_systems(
             Startup,
             (
                 load_spawner,
-                load_bullet,
                 load_asteroids.after(load_spawner),
                 //spawn_asteroid_random.after(load_asteroids),
             ),
@@ -62,7 +62,6 @@ impl Plugin for AsteroidsPlugin {
                 collisions_asteroids,
                 collisions_ship,
                 collisions_bullets,
-                destroy_bullets,
             )
                 .in_set(ObjectUpdate)
                 .run_if(in_state(GameState::InGame)),

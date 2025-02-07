@@ -116,6 +116,8 @@ fn apply_accel_ang(
     }
 }
 
+// TODO! switch to spawning bullets with an event.
+// event chaining is fine, as long as you schedule them correctly
 const SHOT_SPACING: Duration = Duration::from_millis(350);
 pub fn shoot(
     time: Res<Time>,
