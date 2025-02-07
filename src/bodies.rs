@@ -160,16 +160,6 @@ pub fn collisions_bullets(
     }
 }
 
-pub fn move_obj(
-    time: Res<Time>,
-    mut obj: Query<(&mut Position, &mut Rotation, &Velocity, &AngularVelocity), Without<Ship>>,
-) {
-    for (mut position, mut rotation, velocity, angular_velocity) in obj.iter_mut() {
-        position.0 += velocity.0 * time.delta_secs();
-        rotation.0 += angular_velocity.0 * time.delta_secs();
-    }
-}
-
 fn update_position(time: Res<Time>, mut obj: Query<(&mut Position, &Velocity)>) {
     for (mut position, velocity) in &mut obj {
         position.0 += velocity.0 * time.delta_secs();

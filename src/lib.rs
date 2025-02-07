@@ -16,6 +16,8 @@ use std::time::Duration;
 mod asteroid;
 mod bodies;
 mod bullet;
+mod control;
+mod control_ship;
 mod grid;
 mod input;
 mod schedule;
