@@ -59,11 +59,11 @@ pub fn load_bullet(
 }
 
 pub fn spawn_bullet(
-    mut commands: Commands,
-    bullet_assets: Res<BulletAssets>,
+    commands: &mut Commands,
+    bullet_assets: &Res<BulletAssets>,
     position: Vec2,
     rotation: f32,
-    time: Res<Time>,
+    time: &Res<Time>,
 ) {
     commands.spawn((
         BulletBundle::new(position, rotation, time.elapsed()),

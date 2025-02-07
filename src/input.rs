@@ -1,58 +1,46 @@
-use crate::bodies::*;
-use crate::bullet::*;
-use crate::ship::*;
+use crate::control::PlayerController;
+use crate::control_ship::*;
 
 use bevy::prelude::*;
 use std::time::Duration;
 
-const SHOT_SPACING: Duration = Duration::from_millis(350);
-
 pub fn handle_player_input(
+    controllers: Query<(Entity, &PlayerController)>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    bullet_assets: Res<BulletAssets>,
-    time: Res<Time>,
-    commands: Commands,
-    mut ship: Query<
-        (
-            &mut Acceleration,
-            &mut AngularAcceleration,
-            &Position,
-            &Rotation,
-            &mut TimeStamp,
-        ),
-        With<Ship>,
-    >,
+    mut accel_writer: EventWriter<Accelerate>,
+    mut accel_ang_writer: EventWriter<AccelerateAngular>,
+    mut shoot_writer: EventWriter<Shoot>,
 ) {
-    if let Ok((
-        mut acceleration,
-        mut angular_acceleration,
-        position,
-        rotation,
-        mut last_shot_time,
-    )) = ship.get_single_mut()
-    {
+    for (entity, _controller) in controllers.iter() {
+        // TODO! add input handling to route keys to specific players
+        let mut acceleration = Accelerate {
+            controller: entity,
+            direction: Vec2::new(0.0, 0.0),
+        };
         if keyboard_input.pressed(KeyCode::ArrowUp) {
-            acceleration.0.y = SHIP_SPEED;
+            acceleration.direction.y = 1.0;
         } else if keyboard_input.pressed(KeyCode::ArrowDown) {
-            acceleration.0.y = -SHIP_SPEED;
+            acceleration.direction.y = -1.0;
         } else {
-            acceleration.0.y = 0.;
+            acceleration.direction.y = 0.0;
         }
+        accel_writer.send(acceleration);
 
+        let mut accel_angular = AccelerateAngular {
+            controller: entity,
+            direction: 0.0,
+        };
         if keyboard_input.pressed(KeyCode::ArrowRight) {
-            angular_acceleration.0 = -SHIP_SPEED_ANGULAR;
+            accel_angular.direction = -1.0;
         } else if keyboard_input.pressed(KeyCode::ArrowLeft) {
-            angular_acceleration.0 = SHIP_SPEED_ANGULAR;
+            accel_angular.direction = 1.0;
         } else {
-            angular_acceleration.0 = 0.;
+            accel_angular.direction = 0.0;
         }
+        accel_ang_writer.send(accel_angular);
 
         if keyboard_input.pressed(KeyCode::Space) {
-            let time_elapsed = time.elapsed();
-            if time_elapsed - last_shot_time.0 > SHOT_SPACING {
-                spawn_bullet(commands, bullet_assets, position.0, rotation.0, time);
-                last_shot_time.0 = time_elapsed;
-            }
+            shoot_writer.send(Shoot { controller: entity });
         }
     }
 }
