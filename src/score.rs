@@ -1,5 +1,5 @@
+use crate::schedule::InGameSet;
 use bevy::prelude::*;
-
 #[derive(Resource, Default)]
 struct Score {
     score: u16,
@@ -61,6 +61,9 @@ impl Plugin for ScorePlugin {
         app.init_resource::<Score>();
         app.add_event::<Scored>();
         app.add_systems(Startup, spawn_scoreboard);
-        app.add_systems(Update, (update_score, update_scoreboard));
+        app.add_systems(
+            Update,
+            (update_score, update_scoreboard).in_set(InGameSet::EntityUpdates),
+        );
     }
 }
