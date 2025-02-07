@@ -42,27 +42,23 @@ impl Plugin for AsteroidsPlugin {
         app.add_plugins(ShipPlugin);
         app.add_plugins(BodiesPlugin);
         app.add_plugins(Control2dPlugin);
-        app.init_state::<GameState>();
+        app.add_plugins(StatePlugin);
+        app.add_plugins(GridPlugin);
 
         app.add_systems(
             Startup,
             (
-                spawn_camera,
                 load_spawner,
                 load_bullet,
-                grid_build,
                 load_asteroids.after(load_spawner),
                 //spawn_asteroid_random.after(load_asteroids),
             ),
         );
-        app.add_systems(Update, pause_system);
         app.add_systems(
             Update,
             (
                 handle_player_input,
                 spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
-                wrap_obj,
-                on_resize,
                 collisions_asteroids,
                 collisions_ship,
                 collisions_bullets,
@@ -71,6 +67,5 @@ impl Plugin for AsteroidsPlugin {
                 .in_set(ObjectUpdate)
                 .run_if(in_state(GameState::InGame)),
         );
-        app.add_systems(Update, project_positions.after(ObjectUpdate));
     }
 }

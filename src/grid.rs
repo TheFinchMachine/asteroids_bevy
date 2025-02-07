@@ -1,4 +1,4 @@
-use crate::bodies::*;
+use crate::{bodies::*, schedule::InGameSet};
 use bevy::{prelude::*, window::WindowResized};
 
 // because coords staring in center, half height and with make much more sense
@@ -12,7 +12,7 @@ pub struct Grid {
 }
 
 // so velocity numbers make sense
-pub fn grid_build(mut commands: Commands, window: Query<&Window>) {
+fn grid_build(mut commands: Commands, window: Query<&Window>) {
     if let Ok(window) = window.get_single() {
         let window_height = window.resolution.height();
         let window_width = window.resolution.width();
@@ -29,22 +29,22 @@ pub fn grid_build(mut commands: Commands, window: Query<&Window>) {
     }
 }
 
-pub fn grid_update(width: f32, height: f32, grid: &mut ResMut<Grid>) {
+fn grid_update(width: f32, height: f32, grid: &mut ResMut<Grid>) {
     grid.width_half = width * 0.5 / grid.size;
     grid.height_half = height * 0.5 / grid.size;
 }
 
-pub fn on_resize(mut resize_reader: EventReader<WindowResized>, mut grid: ResMut<Grid>) {
+fn on_resize(mut resize_reader: EventReader<WindowResized>, mut grid: ResMut<Grid>) {
     for e in resize_reader.read() {
         grid_update(e.width, e.height, &mut grid);
     }
 }
 
-pub fn spawn_camera(mut commands: Commands) {
+fn spawn_camera(mut commands: Commands) {
     commands.spawn_empty().insert(Camera2d);
 }
 
-pub fn project_positions(
+fn project_positions(
     mut positionables: Query<(&mut Transform, &Position, &Rotation, &Scale)>,
     grid: Res<Grid>,
 ) {
@@ -62,7 +62,7 @@ pub fn project_positions(
     }
 }
 
-pub fn wrap_obj(mut obj: Query<&mut Position>, grid: Res<Grid>) {
+fn wrap_obj(mut obj: Query<&mut Position>, grid: Res<Grid>) {
     for mut position in &mut obj {
         position.0.x = wrap_around(
             position.0.x,
@@ -81,4 +81,15 @@ fn wrap_around(value: f32, min_value: f32, range: f32) -> f32 {
     // modulo preserves sign so we need to add range and then modulo again to handle negatives
     // could also be done with an if statement but this is specifically branchless
     ((value - min_value) % range + range) % range + min_value
+}
+
+pub struct GridPlugin;
+
+impl Plugin for GridPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, (spawn_camera, grid_build));
+        app.add_systems(Update, (wrap_obj).in_set(InGameSet::EntityUpdates));
+        app.add_systems(Update, (on_resize).in_set(InGameSet::UserInput));
+        app.add_systems(Update, (project_positions).in_set(InGameSet::RenderSetup));
+    }
 }

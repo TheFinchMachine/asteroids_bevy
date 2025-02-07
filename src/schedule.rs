@@ -7,6 +7,7 @@ pub enum InGameSet {
     UserInput,
     EntityUpdates,
     CollisionDetection,
+    RenderSetup,
     DespawnEntities,
 }
 
@@ -21,6 +22,7 @@ impl Plugin for SchudulePlugin {
                 // apply_deferred(Flush)
                 InGameSet::UserInput,
                 InGameSet::EntityUpdates,
+                InGameSet::RenderSetup,
                 InGameSet::CollisionDetection,
             )
                 .chain()
