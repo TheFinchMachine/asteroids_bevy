@@ -6,6 +6,7 @@ use crate::input::*;
 use crate::score::*;
 use crate::ship::*;
 use crate::spawner::*;
+use crate::states::*;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 use bevy_turborand::prelude::*;
@@ -19,6 +20,7 @@ mod input;
 mod score;
 mod ship;
 mod spawner;
+mod states;
 
 const WORLD_SEED: u64 = 1024;
 
@@ -32,6 +34,7 @@ impl Plugin for AsteroidsPlugin {
         app.add_plugins(RngPlugin::new().with_rng_seed(WORLD_SEED));
         app.init_resource::<Score>();
         app.add_event::<Scored>();
+        app.init_state::<GameState>();
         app.add_systems(
             Startup,
             (
@@ -45,6 +48,7 @@ impl Plugin for AsteroidsPlugin {
                 //spawn_asteroid_random.after(load_asteroids),
             ),
         );
+        app.add_systems(Update, pause_system);
         app.add_systems(
             Update,
             (
@@ -61,7 +65,8 @@ impl Plugin for AsteroidsPlugin {
                 update_score.after(collisions_bullets),
                 update_scoreboard.after(collisions_bullets),
             )
-                .in_set(ObjectUpdate),
+                .in_set(ObjectUpdate)
+                .run_if(in_state(GameState::InGame)),
         );
         app.add_systems(Update, project_positions.after(ObjectUpdate));
     }
