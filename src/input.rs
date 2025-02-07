@@ -1,8 +1,6 @@
 use crate::control::PlayerController;
 use crate::control_ship::*;
-
 use bevy::prelude::*;
-use std::time::Duration;
 
 pub fn handle_player_input(
     controllers: Query<(Entity, &PlayerController)>,
