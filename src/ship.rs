@@ -2,16 +2,17 @@ use crate::{
     bodies::*,
     bullet::spawn_bullet,
     control::{Pawn, PlayerController},
-    control_ship::{Accelerate, AccelerateAngular, Shoot},
+    control_2d::{Accelerate, AccelerateAngular, Shoot},
+    schedule::InGameSet,
     BulletAssets,
 };
 use bevy::prelude::*;
 use std::time::Duration;
 
-pub const SHIP_SPEED: f32 = 2.0;
-const SHIP_DAMPING: f32 = 1.0;
+pub const SHIP_SPEED: f32 = 4.0;
+const SHIP_DAMPING: f32 = 0.5;
 
-pub const SHIP_SPEED_ANGULAR: f32 = 6.0;
+pub const SHIP_SPEED_ANGULAR: f32 = 36.0;
 const SHIP_DAMPING_ANGULAR: f32 = 10.0;
 
 #[derive(Component)]
@@ -57,7 +58,7 @@ impl ShipBundle {
     }
 }
 
-pub fn spawn_ship(
+fn spawn_ship(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
@@ -89,7 +90,7 @@ pub fn spawn_ship(
     ));
 }
 
-pub fn apply_accel(
+fn apply_accel(
     mut ships: Query<(&mut Acceleration, &Pawn), With<Ship>>,
     mut events: EventReader<Accelerate>,
 ) {
@@ -102,7 +103,7 @@ pub fn apply_accel(
     }
 }
 
-pub fn apply_accel_ang(
+fn apply_accel_ang(
     mut ships: Query<(&mut AngularAcceleration, &Pawn), With<Ship>>,
     mut events: EventReader<AccelerateAngular>,
 ) {
@@ -133,5 +134,17 @@ pub fn shoot(
                 }
             }
         }
+    }
+}
+
+pub struct ShipPlugin;
+
+impl Plugin for ShipPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, (spawn_ship,));
+        app.add_systems(
+            Update,
+            (apply_accel, apply_accel_ang, shoot).in_set(InGameSet::EntityUpdates),
+        );
     }
 }

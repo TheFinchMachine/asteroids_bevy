@@ -1,5 +1,5 @@
 use crate::control::PlayerController;
-use crate::control_ship::*;
+use crate::control_2d::*;
 use bevy::prelude::*;
 
 pub fn handle_player_input(

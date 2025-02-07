@@ -16,3 +16,13 @@ pub struct AccelerateAngular {
 pub struct Shoot {
     pub controller: Entity,
 }
+
+pub struct Control2dPlugin;
+
+impl Plugin for Control2dPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_event::<Accelerate>();
+        app.add_event::<AccelerateAngular>();
+        app.add_event::<Shoot>();
+    }
+}
