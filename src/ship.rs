@@ -68,7 +68,7 @@ pub fn spawn_ship(
         Transform::default(),
     ));
 }
-
+/*
 pub fn move_ship(
     time: Res<Time>,
     mut ship: Query<
@@ -105,3 +105,4 @@ pub fn move_ship(
         velocity.0 *= (-SHIP_DAMPING * time.delta_secs()).exp();
     }
 }
+*/

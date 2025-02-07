@@ -10,6 +10,7 @@ use crate::states::*;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 use bevy_turborand::prelude::*;
+use schedule::SchudulePlugin;
 use std::time::Duration;
 
 mod asteroid;
@@ -34,7 +35,8 @@ impl Plugin for AsteroidsPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(RngPlugin::new().with_rng_seed(WORLD_SEED));
         app.add_plugins(ScorePlugin);
-        app.add_plugins(ScorePlugin);
+        app.add_plugins(SchudulePlugin);
+        app.add_plugins(BodiesPlugin);
         app.init_state::<GameState>();
         app.add_systems(
             Startup,
@@ -54,8 +56,8 @@ impl Plugin for AsteroidsPlugin {
             (
                 handle_player_input,
                 spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
-                move_obj,
-                move_ship,
+                //move_obj,
+                //move_ship,
                 wrap_obj,
                 on_resize,
                 collisions_asteroids,

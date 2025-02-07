@@ -1,5 +1,6 @@
 use crate::asteroid::*;
 use crate::bullet::Bullet;
+use crate::schedule::InGameSet;
 use crate::score::Scored;
 use crate::ship::Ship;
 use crate::spawner::SpawnGenerator;
@@ -157,8 +158,52 @@ pub fn move_obj(
     time: Res<Time>,
     mut obj: Query<(&mut Position, &mut Rotation, &Velocity, &AngularVelocity), Without<Ship>>,
 ) {
-    for (mut position, mut rotation, velocity, angular_velocity) in &mut obj {
+    for (mut position, mut rotation, velocity, angular_velocity) in obj.iter_mut() {
         position.0 += velocity.0 * time.delta_secs();
         rotation.0 += angular_velocity.0 * time.delta_secs();
+    }
+}
+
+fn update_position(time: Res<Time>, mut obj: Query<(&mut Position, &Velocity)>) {
+    for (mut position, velocity) in &mut obj {
+        position.0 += velocity.0 * time.delta_secs();
+    }
+}
+fn update_rotation(time: Res<Time>, mut obj: Query<(&mut Rotation, &AngularVelocity)>) {
+    for (mut rotation, angular_velocity) in obj.iter_mut() {
+        rotation.0 += angular_velocity.0 * time.delta_secs();
+    }
+}
+fn update_velocity(time: Res<Time>, mut obj: Query<(&mut Velocity, &Acceleration, &Rotation)>) {
+    for (mut velocity, acceleration, rotation) in obj.iter_mut() {
+        let rotator = Rot2::radians(rotation.0);
+        velocity.0 += rotator * acceleration.0 * time.delta_secs();
+    }
+}
+fn update_angular_velocity(
+    time: Res<Time>,
+    mut obj: Query<(&mut AngularVelocity, &AngularAcceleration)>,
+) {
+    for (mut angular_velocity, angular_acceleration) in obj.iter_mut() {
+        angular_velocity.0 += angular_acceleration.0 * time.delta_secs();
+    }
+}
+
+pub struct BodiesPlugin;
+
+impl Plugin for BodiesPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            (update_velocity, update_position)
+                .chain()
+                .in_set(InGameSet::EntityUpdates),
+        );
+        app.add_systems(
+            Update,
+            (update_angular_velocity, update_rotation)
+                .chain()
+                .in_set(InGameSet::EntityUpdates),
+        );
     }
 }
