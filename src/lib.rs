@@ -17,6 +17,7 @@ mod bodies;
 mod bullet;
 mod grid;
 mod input;
+mod schedule;
 mod score;
 mod ship;
 mod spawner;
@@ -32,6 +33,7 @@ struct ObjectUpdate;
 impl Plugin for AsteroidsPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(RngPlugin::new().with_rng_seed(WORLD_SEED));
+        app.add_plugins(ScorePlugin);
         app.add_plugins(ScorePlugin);
         app.init_state::<GameState>();
         app.add_systems(
