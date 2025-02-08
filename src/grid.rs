@@ -1,27 +1,32 @@
 use crate::{bodies::*, schedule::InGameSet};
 use bevy::{prelude::*, window::WindowResized};
+use bevy_easy_config::EasyConfigPlugin;
+use serde::Deserialize;
 
 // because coords staring in center, half height and with make much more sense
 #[derive(Resource)]
 pub struct Grid {
     pub size: f32,
-    pub scale: f32,
     pub extends: f32,
     pub height_half: f32,
     pub width_half: f32,
 }
 
+#[derive(Resource, Default, Deserialize, Asset, Clone, Copy, TypePath)]
+struct GridConfig {
+    size: f32,
+}
+
 // so velocity numbers make sense
-fn grid_build(mut commands: Commands, window: Query<&Window>) {
+fn grid_build(mut commands: Commands, window: Query<&Window>, config: Res<GridConfig>) {
     if let Ok(window) = window.get_single() {
         let window_height = window.resolution.height();
         let window_width = window.resolution.width();
         let window_scale = window.resolution.scale_factor();
 
-        let size = 100.0 * window_scale;
+        let size = config.size * window_scale;
         commands.insert_resource(Grid {
             size,
-            scale: window_scale,
             extends: 0.5 * window_scale,
             height_half: window_height * 0.5 / size,
             width_half: window_width * 0.5 / size,
@@ -87,6 +92,7 @@ pub struct GridPlugin;
 
 impl Plugin for GridPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(EasyConfigPlugin::<GridConfig>::new("grid.cfg.ron"));
         app.add_systems(Startup, (spawn_camera, grid_build));
         app.add_systems(Update, (wrap_obj).in_set(InGameSet::EntityUpdates));
         app.add_systems(Update, (on_resize).in_set(InGameSet::MenuInput));
