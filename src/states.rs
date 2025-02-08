@@ -32,6 +32,6 @@ pub struct StatePlugin;
 impl Plugin for StatePlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<GameState>();
-        app.add_systems(Update, (pause_system).in_set(InGameSet::UserInput));
+        app.add_systems(Update, (pause_system).in_set(InGameSet::MenuInput));
     }
 }

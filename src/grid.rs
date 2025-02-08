@@ -89,7 +89,7 @@ impl Plugin for GridPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, (spawn_camera, grid_build));
         app.add_systems(Update, (wrap_obj).in_set(InGameSet::EntityUpdates));
-        app.add_systems(Update, (on_resize).in_set(InGameSet::UserInput));
+        app.add_systems(Update, (on_resize).in_set(InGameSet::MenuInput));
         app.add_systems(Update, (project_positions).in_set(InGameSet::RenderSetup));
     }
 }

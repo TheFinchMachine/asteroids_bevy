@@ -45,6 +45,6 @@ impl Plugin for AsteroidsGamePlugin {
         app.add_plugins(BulletPlugin);
         app.add_plugins(AsteroidsPlugin);
 
-        app.add_systems(Update, (handle_player_input,).in_set(InGameSet::UserInput));
+        app.add_systems(Update, (handle_player_input,).in_set(InGameSet::GameInput));
     }
 }

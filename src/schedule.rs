@@ -4,7 +4,8 @@ use crate::GameState;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 pub enum InGameSet {
-    UserInput,
+    GameInput,
+    MenuInput,
     EntityUpdates,
     CollisionDetection,
     RenderSetup,
@@ -20,7 +21,7 @@ impl Plugin for SchudulePlugin {
             (
                 InGameSet::DespawnEntities,
                 // apply_deferred(Flush)
-                InGameSet::UserInput,
+                InGameSet::GameInput,
                 InGameSet::EntityUpdates,
                 InGameSet::RenderSetup,
                 InGameSet::CollisionDetection,
@@ -32,7 +33,8 @@ impl Plugin for SchudulePlugin {
             Update,
             apply_deferred
                 .after(InGameSet::DespawnEntities)
-                .before(InGameSet::UserInput),
+                .before(InGameSet::GameInput),
         );
+        app.configure_sets(Update, (InGameSet::MenuInput));
     }
 }
