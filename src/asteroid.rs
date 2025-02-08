@@ -8,14 +8,19 @@ use bevy::prelude::*;
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::time::common_conditions::on_timer;
+use bevy_easy_config::EasyConfigPlugin;
 use bevy_turborand::prelude::*;
+use serde::Deserialize;
 use std::time::Duration;
 
-const ASTEROID_VARIANTS: usize = 100;
+#[derive(Resource, Default, Deserialize, Asset, Clone, Copy, TypePath)]
+struct AsteroidConfig {
+    varients: usize,
+}
 
 #[derive(Resource)]
 pub struct AsteroidAssets {
-    pub meshes: [Handle<Mesh>; ASTEROID_VARIANTS],
+    pub meshes: Vec<Handle<Mesh>>,
     pub material: Handle<ColorMaterial>,
 }
 
@@ -57,11 +62,14 @@ pub fn load_asteroids(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut spawner: ResMut<SpawnGenerator>,
+    config: Res<AsteroidConfig>,
 ) {
     let material = materials.add(Color::srgb(0.5, 1., 0.5));
 
-    let new_meshes: [Handle<Mesh>; ASTEROID_VARIANTS] =
-        std::array::from_fn(|_| meshes.add(create_astroid_mesh(&mut spawner)));
+    let mut new_meshes = Vec::with_capacity(config.varients);
+    for _ in 0..config.varients {
+        new_meshes.push(meshes.add(create_astroid_mesh(&mut spawner)))
+    }
 
     commands.insert_resource(AsteroidAssets {
         meshes: new_meshes,
@@ -73,12 +81,13 @@ pub fn spawn_asteroid(
     commands: &mut Commands,
     asteroid_assets: &Res<AsteroidAssets>,
     spawner: &mut ResMut<SpawnGenerator>,
+    config: &Res<AsteroidConfig>,
     position: Vec2,
     velocity: Vec2,
     angular_velocity: f32,
     scale: f32,
 ) {
-    let mesh = spawner.rng.usize(0..ASTEROID_VARIANTS);
+    let mesh = spawner.rng.usize(0..config.varients);
     commands.spawn((
         AsteroidBundle::new(position, velocity, angular_velocity, scale),
         Mesh2d(asteroid_assets.meshes[mesh].clone()),
@@ -91,6 +100,7 @@ pub fn spawn_asteroid_child(
     commands: &mut Commands,
     asteroid_assets: &Res<AsteroidAssets>,
     spawner: &mut ResMut<SpawnGenerator>,
+    config: &Res<AsteroidConfig>,
     position: Vec2,
     velocity: Vec2,
     scale: f32,
@@ -103,6 +113,7 @@ pub fn spawn_asteroid_child(
         commands,
         asteroid_assets,
         spawner,
+        config,
         position + vel_offset1 * scale * 0.001,
         vel_offset1 * vel_len * 0.75,
         ang_vel,
@@ -195,6 +206,7 @@ pub fn spawn_asteroid_random(
     asteroid_assets: Res<AsteroidAssets>,
     mut spawner: ResMut<SpawnGenerator>,
     grid: Res<Grid>,
+    config: Res<AsteroidConfig>,
 ) {
     // spawn position offscreen inside grid extents
     let x_dist = spawner.rng.f32_normalized() * grid.extends;
@@ -222,6 +234,7 @@ pub fn spawn_asteroid_random(
         &mut commands,
         &asteroid_assets,
         &mut spawner,
+        &config,
         position,
         velocity,
         angular_velocity,
@@ -238,6 +251,7 @@ fn destroy_asteroids(
     colliders: Query<&Collider>,
     mut collisions: EventReader<Collision>,
     mut score: EventWriter<Scored>,
+    config: Res<AsteroidConfig>,
 ) {
     for event in collisions.read() {
         for (entity_a, entity_b) in [
@@ -256,6 +270,7 @@ fn destroy_asteroids(
                                 &mut commands,
                                 &asteroid_assets,
                                 &mut spawner,
+                                &config,
                                 ast_pos.0,
                                 ast_vel.0,
                                 ast_scale.0,
@@ -265,6 +280,7 @@ fn destroy_asteroids(
                                 &mut commands,
                                 &asteroid_assets,
                                 &mut spawner,
+                                &config,
                                 ast_pos.0,
                                 ast_vel.0,
                                 ast_scale.0,
@@ -309,6 +325,7 @@ pub struct AsteroidsPlugin;
 
 impl Plugin for AsteroidsPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(EasyConfigPlugin::<AsteroidConfig>::new("asteroid.cfg.ron"));
         app.add_systems(Startup, (load_spawner, load_asteroids.after(load_spawner)));
         app.add_systems(
             Update,
