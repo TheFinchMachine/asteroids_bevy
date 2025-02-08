@@ -11,6 +11,7 @@ use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 use bevy_turborand::prelude::*;
 use control_2d::Control2dPlugin;
+use schedule::InGameSet;
 use schedule::SchudulePlugin;
 use std::time::Duration;
 
@@ -29,12 +30,9 @@ mod states;
 
 const WORLD_SEED: u64 = 1024;
 
-pub struct AsteroidsPlugin;
+pub struct AsteroidsGamePlugin;
 
-#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
-struct ObjectUpdate;
-
-impl Plugin for AsteroidsPlugin {
+impl Plugin for AsteroidsGamePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(RngPlugin::new().with_rng_seed(WORLD_SEED));
         app.add_plugins(ScorePlugin);
@@ -45,23 +43,8 @@ impl Plugin for AsteroidsPlugin {
         app.add_plugins(StatePlugin);
         app.add_plugins(GridPlugin);
         app.add_plugins(BulletPlugin);
+        app.add_plugins(AsteroidsPlugin);
 
-        app.add_systems(
-            Startup,
-            (
-                load_spawner,
-                load_asteroids.after(load_spawner),
-                //spawn_asteroid_random.after(load_asteroids),
-            ),
-        );
-        app.add_systems(
-            Update,
-            (
-                handle_player_input,
-                spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
-            )
-                .in_set(ObjectUpdate)
-                .run_if(in_state(GameState::InGame)),
-        );
+        app.add_systems(Update, (handle_player_input,).in_set(InGameSet::UserInput));
     }
 }

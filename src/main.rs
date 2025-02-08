@@ -1,4 +1,4 @@
-use asteroids::AsteroidsPlugin;
+use asteroids::AsteroidsGamePlugin;
 use bevy::prelude::*;
 
 fn main() {
@@ -10,6 +10,6 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(AsteroidsPlugin)
+        .add_plugins(AsteroidsGamePlugin)
         .run();
 }

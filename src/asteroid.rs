@@ -1,10 +1,15 @@
 use crate::bodies::*;
 use crate::grid::*;
+use crate::load_spawner;
+use crate::schedule::InGameSet;
+use crate::score::Scored;
 use crate::spawner::SpawnGenerator;
 use bevy::prelude::*;
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
+use bevy::time::common_conditions::on_timer;
 use bevy_turborand::prelude::*;
+use std::time::Duration;
 
 const ASTEROID_VARIANTS: usize = 100;
 
@@ -224,6 +229,7 @@ pub fn spawn_asteroid_random(
     );
 }
 
+// TODO! switch spawning children to an event
 fn destroy_asteroids(
     mut commands: Commands,
     asteroid_assets: Res<AsteroidAssets>,
@@ -231,6 +237,7 @@ fn destroy_asteroids(
     asteroids: Query<(Entity, &Collider, &Position, &Velocity, &Scale), With<Asteroid>>,
     colliders: Query<&Collider>,
     mut collisions: EventReader<Collision>,
+    mut score: EventWriter<Scored>,
 ) {
     for event in collisions.read() {
         for (entity_a, entity_b) in [
@@ -242,6 +249,8 @@ fn destroy_asteroids(
             {
                 if let Ok(collider) = colliders.get(entity_b) {
                     if collider.team != ast_collider.team {
+                        // TODO! add teams to score
+                        score.send(Scored);
                         if ast_scale.0 > 25.0 {
                             spawn_asteroid_child(
                                 &mut commands,
@@ -293,5 +302,25 @@ fn bounce_asteroids(
             ast_a_pos.0 -= correction;
             ast_b_pos.0 += correction;
         }
+    }
+}
+
+pub struct AsteroidsPlugin;
+
+impl Plugin for AsteroidsPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, (load_spawner, load_asteroids.after(load_spawner)));
+        app.add_systems(
+            Update,
+            (destroy_asteroids).in_set(InGameSet::DespawnEntities),
+        );
+        app.add_systems(
+            Update,
+            (
+                bounce_asteroids,
+                spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
+            )
+                .in_set(InGameSet::EntityUpdates),
+        );
     }
 }
