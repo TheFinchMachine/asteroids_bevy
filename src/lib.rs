@@ -8,12 +8,10 @@ use crate::ship::*;
 use crate::spawner::*;
 use crate::states::*;
 use bevy::prelude::*;
-use bevy::time::common_conditions::on_timer;
 use bevy_turborand::prelude::*;
 use control_2d::Control2dPlugin;
 use schedule::InGameSet;
 use schedule::SchudulePlugin;
-use std::time::Duration;
 
 mod asteroid;
 mod bodies;

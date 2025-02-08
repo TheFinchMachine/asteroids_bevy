@@ -1,11 +1,5 @@
-use crate::asteroid::*;
-use crate::bullet::Bullet;
 use crate::schedule::InGameSet;
-use crate::score::Scored;
-use crate::ship::Ship;
-use crate::spawner::SpawnGenerator;
 use bevy::prelude::*;
-use bevy_turborand::prelude::*;
 use std::time::Duration;
 
 #[derive(Component)]
@@ -70,7 +64,7 @@ pub fn collision_bounce(
     )
 }
 
-pub fn collide(pos1: Vec2, pos2: Vec2, r1: f32, r2: f32) -> (Vec2, f32, f32) {
+fn collide(pos1: Vec2, pos2: Vec2, r1: f32, r2: f32) -> (Vec2, f32, f32) {
     let dir = pos2 - pos1;
     let dist = dir.length().abs();
     let collide_dist = r1 + r2;
