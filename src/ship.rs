@@ -1,7 +1,7 @@
 use crate::{
     bodies::*,
     bullet::CreateBullet,
-    control::{Pawn, PlayerController},
+    control::{Pawn, PlayerController, ShipPawn},
     control_2d::{Accelerate, AccelerateAngular, Shoot},
     schedule::InGameSet,
 };
@@ -24,7 +24,7 @@ pub struct Ship;
 #[derive(Bundle)]
 struct ShipBundle {
     ship: Ship,
-    pawn: Pawn,
+    pawn: ShipPawn,
     position: Position,
     rotation: Rotation,
     scale: Scale,
@@ -40,7 +40,7 @@ struct ShipBundle {
 }
 
 impl ShipBundle {
-    fn new(x: f32, y: f32, pawn: Pawn, damping: f32, angular_damping: f32) -> Self {
+    fn new(x: f32, y: f32, pawn: ShipPawn, damping: f32, angular_damping: f32) -> Self {
         Self {
             ship: Ship,
             pawn,
@@ -86,9 +86,7 @@ fn spawn_ship(
         ShipBundle::new(
             0.,
             0.,
-            Pawn {
-                controller: player_entity,
-            },
+            ShipPawn::new(player_entity),
             ship_config.damping,
             ship_config.damping_angular,
         ),
@@ -100,12 +98,12 @@ fn spawn_ship(
 
 fn apply_accel(
     ship_config: Res<ShipConfig>,
-    mut ships: Query<(&mut Acceleration, &Pawn), With<Ship>>,
+    mut ships: Query<(&mut Acceleration, &ShipPawn), With<Ship>>,
     mut events: EventReader<Accelerate>,
 ) {
     for event in events.read() {
         for (mut acceleration, pawn) in ships.iter_mut() {
-            if pawn.controller == event.controller {
+            if pawn.get_controller() == &event.controller {
                 acceleration.0 = ship_config.speed * event.direction;
             }
         }
@@ -114,30 +112,28 @@ fn apply_accel(
 
 fn apply_accel_ang(
     ship_config: Res<ShipConfig>,
-    mut ships: Query<(&mut AngularAcceleration, &Pawn), With<Ship>>,
+    mut ships: Query<(&mut AngularAcceleration, &ShipPawn), With<Ship>>,
     mut events: EventReader<AccelerateAngular>,
 ) {
     for event in events.read() {
         for (mut angular_accel, pawn) in ships.iter_mut() {
-            if pawn.controller == event.controller {
+            if pawn.get_controller() == &event.controller {
                 angular_accel.0 = ship_config.speed_angular * event.direction;
             }
         }
     }
 }
 
-// TODO! switch to spawning bullets with an event.
-// event chaining is fine, as long as you schedule them correctly
 const SHOT_SPACING: Duration = Duration::from_millis(350);
 pub fn shoot(
     time: Res<Time>,
-    mut ships: Query<(&Position, &Rotation, &mut TimeStamp, &Pawn), With<Ship>>,
+    mut ships: Query<(&Position, &Rotation, &mut TimeStamp, &ShipPawn), With<Ship>>,
     mut events: EventReader<Shoot>,
     mut create_bullet: EventWriter<CreateBullet>,
 ) {
     for event in events.read() {
         for (position, rotation, mut last_shot_time, pawn) in ships.iter_mut() {
-            if pawn.controller == event.controller {
+            if pawn.get_controller() == &event.controller {
                 let time_elapsed = time.elapsed();
                 if time_elapsed - last_shot_time.0 > SHOT_SPACING {
                     create_bullet.send(CreateBullet {
