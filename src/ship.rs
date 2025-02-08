@@ -7,12 +7,20 @@ use crate::{
     BulletAssets,
 };
 use bevy::prelude::*;
+use bevy_easy_config::EasyConfigPlugin;
+use serde::Deserialize;
 use std::time::Duration;
 
-pub const SHIP_SPEED: f32 = 4.0;
+#[derive(Resource, Default, Deserialize, Asset, Clone, Copy, TypePath)]
+struct ShipConfig {
+    speed: f32,
+    damping: f32,
+    speed_angular: f32,
+    damping_angular: f32,
+}
+
 const SHIP_DAMPING: f32 = 0.5;
 
-pub const SHIP_SPEED_ANGULAR: f32 = 36.0;
 const SHIP_DAMPING_ANGULAR: f32 = 10.0;
 
 #[derive(Component)]
@@ -37,7 +45,7 @@ struct ShipBundle {
 }
 
 impl ShipBundle {
-    fn new(x: f32, y: f32, pawn: Pawn) -> Self {
+    fn new(x: f32, y: f32, pawn: Pawn, damping: f32, angular_damping: f32) -> Self {
         Self {
             ship: Ship,
             pawn,
@@ -46,10 +54,10 @@ impl ShipBundle {
             scale: Scale(10.0),
             velocity: Velocity(Vec2::new(0., 0.)),
             acceleration: Acceleration(Vec2::new(0., 0.)),
-            damping: Damping(SHIP_DAMPING),
+            damping: Damping(damping),
             angular_velocity: AngularVelocity(0.0),
             angular_acceleration: AngularAcceleration(0.0),
-            angular_damping: AngularDamping(SHIP_DAMPING_ANGULAR),
+            angular_damping: AngularDamping(angular_damping),
             last_shot: TimeStamp(Duration::ZERO),
             rigid_body: RigidBody {
                 radius: 0.1,
@@ -62,6 +70,7 @@ impl ShipBundle {
 
 fn spawn_ship(
     mut commands: Commands,
+    ship_config: Res<ShipConfig>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
@@ -85,6 +94,8 @@ fn spawn_ship(
             Pawn {
                 controller: player_entity,
             },
+            ship_config.damping,
+            ship_config.damping_angular,
         ),
         Mesh2d(mesh),
         MeshMaterial2d(material),
@@ -93,26 +104,28 @@ fn spawn_ship(
 }
 
 fn apply_accel(
+    ship_config: Res<ShipConfig>,
     mut ships: Query<(&mut Acceleration, &Pawn), With<Ship>>,
     mut events: EventReader<Accelerate>,
 ) {
     for event in events.read() {
         for (mut acceleration, pawn) in ships.iter_mut() {
             if pawn.controller == event.controller {
-                acceleration.0 = SHIP_SPEED * event.direction;
+                acceleration.0 = ship_config.speed * event.direction;
             }
         }
     }
 }
 
 fn apply_accel_ang(
+    ship_config: Res<ShipConfig>,
     mut ships: Query<(&mut AngularAcceleration, &Pawn), With<Ship>>,
     mut events: EventReader<AccelerateAngular>,
 ) {
     for event in events.read() {
         for (mut angular_accel, pawn) in ships.iter_mut() {
             if pawn.controller == event.controller {
-                angular_accel.0 = SHIP_SPEED_ANGULAR * event.direction;
+                angular_accel.0 = ship_config.speed_angular * event.direction;
             }
         }
     }
@@ -170,6 +183,7 @@ pub struct ShipPlugin;
 
 impl Plugin for ShipPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(EasyConfigPlugin::<ShipConfig>::new("ship.cfg.ron"));
         app.add_systems(Startup, (spawn_ship,));
         app.add_systems(
             Update,

@@ -1,0 +1,6 @@
+ShipConfig(
+    speed: 4.0,
+    damping: 0.5,
+    speed_angular: 36.0,
+    damping_angular: 10.0,
+)
