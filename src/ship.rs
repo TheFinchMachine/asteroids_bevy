@@ -33,6 +33,7 @@ struct ShipBundle {
     angular_damping: AngularDamping,
     last_shot: TimeStamp,
     rigid_body: RigidBody,
+    collider: Collider,
 }
 
 impl ShipBundle {
@@ -54,6 +55,7 @@ impl ShipBundle {
                 radius: 0.1,
                 mass: 2.0,
             },
+            collider: Collider { team: 1 },
         }
     }
 }
@@ -139,6 +141,31 @@ pub fn shoot(
     }
 }
 
+fn collisions_ship(
+    mut commands: Commands,
+    ships: Query<(Entity, &Collider), With<Ship>>,
+    colliders: Query<(Entity, &Collider)>,
+    mut collisions: EventReader<Collision>,
+) {
+    for event in collisions.read() {
+        if let Ok((ship, ship_collider)) = ships.get(event.entity1) {
+            if let Ok((_, collider)) = colliders.get(event.entity2) {
+                if collider.team != ship_collider.team {
+                    commands.entity(ship).despawn();
+                }
+            }
+        } else if let Ok((ship, ship_collider)) = ships.get(event.entity2) {
+            if let Ok((_, collider)) = colliders.get(event.entity1) {
+                if collider.team != ship_collider.team {
+                    commands.entity(ship).despawn();
+                }
+            }
+        } else {
+            continue;
+        }
+    }
+}
+
 pub struct ShipPlugin;
 
 impl Plugin for ShipPlugin {
@@ -148,5 +175,6 @@ impl Plugin for ShipPlugin {
             Update,
             (apply_accel, apply_accel_ang, shoot).in_set(InGameSet::EntityUpdates),
         );
+        app.add_systems(Update, (collisions_ship).in_set(InGameSet::DespawnEntities));
     }
 }

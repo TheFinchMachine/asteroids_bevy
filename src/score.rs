@@ -1,5 +1,7 @@
 use crate::schedule::InGameSet;
 use bevy::prelude::*;
+
+// TODO! add teams to score
 #[derive(Resource, Default)]
 struct Score {
     score: u16,

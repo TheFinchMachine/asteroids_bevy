@@ -77,85 +77,36 @@ pub fn collide(pos1: Vec2, pos2: Vec2, r1: f32, r2: f32) -> (Vec2, f32, f32) {
     (dir, dist, collide_dist)
 }
 
-pub fn collisions_asteroids(
-    mut bodies: Query<(&mut Position, &mut Velocity, &RigidBody), With<Asteroid>>,
+#[derive(Event)]
+pub struct Collision {
+    pub entity1: Entity,
+    pub entity2: Entity,
+    pub dir: Vec2,
+    pub dist: f32,
+    pub collide_dist: f32,
+}
+
+// lets call asteroids team 0
+#[derive(Component, Debug)]
+pub struct Collider {
+    pub team: u32,
+}
+
+fn collisions(
+    mut bodies: Query<(Entity, &Position, &RigidBody)>,
+    mut collision_writer: EventWriter<Collision>,
 ) {
     let mut combinations = bodies.iter_combinations_mut();
-    while let Some([(mut pos1, mut vel1, body1), (mut pos2, mut vel2, body2)]) =
-        combinations.fetch_next()
-    {
+    while let Some([(entity1, pos1, body1), (entity2, pos2, body2)]) = combinations.fetch_next() {
         let (dir, dist, collide_dist) = collide(pos1.0, pos2.0, body1.radius, body2.radius);
-
         if dist < collide_dist {
-            let normal = dir.normalize();
-            (vel1.0, vel2.0) = collision_bounce(vel1.0, vel2.0, normal, body1.mass, body2.mass);
-
-            let depth = collide_dist - dist;
-            let correction = normal * (depth * 0.5);
-            pos1.0 -= correction;
-            pos2.0 += correction;
-        }
-    }
-}
-
-pub fn collisions_ship(
-    mut commands: Commands,
-    ships: Query<(Entity, &Position, &RigidBody), With<Ship>>,
-    asteroids: Query<(&Position, &RigidBody), With<Asteroid>>,
-) {
-    for (ship_entity, ship_pos, ship_body) in &ships {
-        for (ast_pos, ast_body) in &asteroids {
-            let (_, dist, collide_dist) =
-                collide(ship_pos.0, ast_pos.0, ship_body.radius, ast_body.radius);
-            if dist < collide_dist {
-                commands.entity(ship_entity).despawn();
-            }
-        }
-    }
-}
-
-pub fn collisions_bullets(
-    mut commands: Commands,
-    bullets: Query<(Entity, &Position, &RigidBody), With<Bullet>>,
-    asteroids: Query<(Entity, &Position, &Velocity, &Scale, &RigidBody), With<Asteroid>>,
-    asteroid_assets: Res<AsteroidAssets>,
-    mut spawner: ResMut<SpawnGenerator>,
-    mut events: EventWriter<Scored>,
-) {
-    for (bul_entity, bul_pos, bul_body) in &bullets {
-        for (ast_entity, ast_pos, ast_vel, ast_scale, ast_body) in &asteroids {
-            let (_, dist, collide_dist) =
-                collide(bul_pos.0, ast_pos.0, bul_body.radius, ast_body.radius);
-            if dist < collide_dist {
-                events.send(Scored);
-                commands.entity(bul_entity).despawn();
-                commands.entity(ast_entity).despawn();
-                let av1 = spawner.rng.f32_normalized();
-                let av2 = spawner.rng.f32_normalized();
-
-                if ast_scale.0 > 25.0 {
-                    spawn_asteroid_child(
-                        &mut commands,
-                        &asteroid_assets,
-                        &mut spawner,
-                        ast_pos.0,
-                        ast_vel.0,
-                        av1,
-                        ast_scale.0,
-                        50.0,
-                    );
-                    spawn_asteroid_child(
-                        &mut commands,
-                        &asteroid_assets,
-                        &mut spawner,
-                        ast_pos.0,
-                        ast_vel.0,
-                        av2,
-                        ast_scale.0,
-                        -50.0,
-                    );
-                }
-            }
+            collision_writer.send(Collision {
+                entity1,
+                entity2,
+                dir,
+                dist,
+                collide_dist,
+            });
         }
     }
 }
@@ -199,6 +150,7 @@ pub struct BodiesPlugin;
 
 impl Plugin for BodiesPlugin {
     fn build(&self, app: &mut App) {
+        app.add_event::<Collision>();
         app.add_systems(
             Update,
             (update_velocity, update_position, damping)
@@ -211,5 +163,6 @@ impl Plugin for BodiesPlugin {
                 .chain()
                 .in_set(InGameSet::EntityUpdates),
         );
+        app.add_systems(Update, (collisions).in_set(InGameSet::CollisionDetection));
     }
 }

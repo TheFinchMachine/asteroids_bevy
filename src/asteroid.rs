@@ -26,6 +26,7 @@ struct AsteroidBundle {
     angular_velocity: AngularVelocity,
     scale: Scale,
     rigid_body: RigidBody,
+    collider: Collider,
 }
 
 impl AsteroidBundle {
@@ -41,6 +42,7 @@ impl AsteroidBundle {
                 radius: scale * 0.01,
                 mass: 2.0,
             },
+            collider: Collider { team: 0 },
         }
     }
 }
@@ -86,19 +88,19 @@ pub fn spawn_asteroid_child(
     spawner: &mut ResMut<SpawnGenerator>,
     position: Vec2,
     velocity: Vec2,
-    angular_velocity: f32,
     scale: f32,
     offset: f32,
 ) {
     let vel_len = velocity.length();
     let vel_offset1 = Rot2::degrees(offset) * velocity.normalize();
+    let ang_vel = spawner.rng.f32_normalized();
     spawn_asteroid(
         commands,
         asteroid_assets,
         spawner,
         position + vel_offset1 * scale * 0.001,
         vel_offset1 * vel_len * 0.75,
-        angular_velocity,
+        ang_vel,
         scale / 1.5,
     );
 }
@@ -220,4 +222,76 @@ pub fn spawn_asteroid_random(
         angular_velocity,
         scale,
     );
+}
+
+fn destroy_asteroids(
+    mut commands: Commands,
+    asteroid_assets: Res<AsteroidAssets>,
+    mut spawner: ResMut<SpawnGenerator>,
+    asteroids: Query<(Entity, &Collider, &Position, &Velocity, &Scale), With<Asteroid>>,
+    colliders: Query<&Collider>,
+    mut collisions: EventReader<Collision>,
+) {
+    for event in collisions.read() {
+        for (entity_a, entity_b) in [
+            (event.entity1, event.entity2),
+            (event.entity2, event.entity1),
+        ] {
+            if let Ok((ast_entity, ast_collider, ast_pos, ast_vel, ast_scale)) =
+                asteroids.get(entity_a)
+            {
+                if let Ok(collider) = colliders.get(entity_b) {
+                    if collider.team != ast_collider.team {
+                        if ast_scale.0 > 25.0 {
+                            spawn_asteroid_child(
+                                &mut commands,
+                                &asteroid_assets,
+                                &mut spawner,
+                                ast_pos.0,
+                                ast_vel.0,
+                                ast_scale.0,
+                                50.0,
+                            );
+                            spawn_asteroid_child(
+                                &mut commands,
+                                &asteroid_assets,
+                                &mut spawner,
+                                ast_pos.0,
+                                ast_vel.0,
+                                ast_scale.0,
+                                -50.0,
+                            );
+                        }
+                        commands.entity(ast_entity).despawn();
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn bounce_asteroids(
+    mut asteroids: Query<(&mut Position, &mut Velocity, &RigidBody), With<Asteroid>>,
+    mut collisions: EventReader<Collision>,
+) {
+    for event in collisions.read() {
+        if let Ok(
+            [(mut ast_a_pos, mut ast_a_vel, ast_a_body), (mut ast_b_pos, mut ast_b_vel, ast_b_body)],
+        ) = asteroids.get_many_mut([event.entity1, event.entity2])
+        {
+            let normal = event.dir.normalize();
+            (ast_a_vel.0, ast_b_vel.0) = collision_bounce(
+                ast_a_vel.0,
+                ast_b_vel.0,
+                normal,
+                ast_a_body.mass,
+                ast_b_body.mass,
+            );
+
+            let depth = event.collide_dist - event.dist;
+            let correction = normal * (depth * 0.5);
+            ast_a_pos.0 -= correction;
+            ast_b_pos.0 += correction;
+        }
+    }
 }

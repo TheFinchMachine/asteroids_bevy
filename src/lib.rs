@@ -59,9 +59,6 @@ impl Plugin for AsteroidsPlugin {
             (
                 handle_player_input,
                 spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
-                collisions_asteroids,
-                collisions_ship,
-                collisions_bullets,
             )
                 .in_set(ObjectUpdate)
                 .run_if(in_state(GameState::InGame)),

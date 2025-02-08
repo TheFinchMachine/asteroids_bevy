@@ -24,6 +24,7 @@ struct BulletBundle {
     scale: Scale,
     spawn_time: TimeStamp,
     rigid_body: RigidBody,
+    collider: Collider,
 }
 
 impl BulletBundle {
@@ -40,6 +41,8 @@ impl BulletBundle {
                 radius: 0.02,
                 mass: 2.0,
             },
+            // TODO! inherit team from ship
+            collider: Collider { team: 1 },
         }
     }
 }
@@ -88,11 +91,39 @@ fn destroy_bullets(
     }
 }
 
+fn collisions_bullets(
+    mut commands: Commands,
+    bullets: Query<(Entity, &Collider), With<Bullet>>,
+    colliders: Query<(Entity, &Collider)>,
+    mut collisions: EventReader<Collision>,
+) {
+    for event in collisions.read() {
+        if let Ok((ship, ship_collider)) = bullets.get(event.entity1) {
+            if let Ok((_, collider)) = colliders.get(event.entity2) {
+                if collider.team != ship_collider.team {
+                    commands.entity(ship).despawn();
+                }
+            }
+        } else if let Ok((ship, ship_collider)) = bullets.get(event.entity2) {
+            if let Ok((_, collider)) = colliders.get(event.entity1) {
+                if collider.team != ship_collider.team {
+                    commands.entity(ship).despawn();
+                }
+            }
+        } else {
+            continue;
+        }
+    }
+}
+
 pub struct BulletPlugin;
 
 impl Plugin for BulletPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, load_bullet);
-        app.add_systems(Update, (destroy_bullets).in_set(InGameSet::DespawnEntities));
+        app.add_systems(
+            Update,
+            (destroy_bullets, collisions_bullets).in_set(InGameSet::DespawnEntities),
+        );
     }
 }
