@@ -23,8 +23,8 @@ impl Plugin for SchudulePlugin {
                 // apply_deferred(Flush)
                 InGameSet::GameInput,
                 InGameSet::EntityUpdates,
-                InGameSet::RenderSetup,
                 InGameSet::CollisionDetection,
+                InGameSet::RenderSetup,
             )
                 .chain()
                 .run_if(in_state(GameState::InGame)),

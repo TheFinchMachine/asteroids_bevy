@@ -1,10 +1,9 @@
 use crate::{
     bodies::*,
-    bullet::spawn_bullet,
+    bullet::CreateBullet,
     control::{Pawn, PlayerController},
     control_2d::{Accelerate, AccelerateAngular, Shoot},
     schedule::InGameSet,
-    BulletAssets,
 };
 use bevy::prelude::*;
 use bevy_easy_config::EasyConfigPlugin;
@@ -18,10 +17,6 @@ struct ShipConfig {
     speed_angular: f32,
     damping_angular: f32,
 }
-
-const SHIP_DAMPING: f32 = 0.5;
-
-const SHIP_DAMPING_ANGULAR: f32 = 10.0;
 
 #[derive(Component)]
 pub struct Ship;
@@ -136,17 +131,19 @@ fn apply_accel_ang(
 const SHOT_SPACING: Duration = Duration::from_millis(350);
 pub fn shoot(
     time: Res<Time>,
-    bullet_assets: Res<BulletAssets>,
-    mut commands: Commands,
     mut ships: Query<(&Position, &Rotation, &mut TimeStamp, &Pawn), With<Ship>>,
     mut events: EventReader<Shoot>,
+    mut create_bullet: EventWriter<CreateBullet>,
 ) {
     for event in events.read() {
         for (position, rotation, mut last_shot_time, pawn) in ships.iter_mut() {
             if pawn.controller == event.controller {
                 let time_elapsed = time.elapsed();
                 if time_elapsed - last_shot_time.0 > SHOT_SPACING {
-                    spawn_bullet(&mut commands, &bullet_assets, position.0, rotation.0, &time);
+                    create_bullet.send(CreateBullet {
+                        position: position.0,
+                        rotation: rotation.0,
+                    });
                     last_shot_time.0 = time_elapsed;
                 }
             }

@@ -1,0 +1,6 @@
+BulletConfig(
+    speed: 6.0,
+    lifetime: 500,
+    size: 4.0,
+    color: (1.0, 1.0, 1.0),
+)
