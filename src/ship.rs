@@ -10,12 +10,17 @@ use bevy_easy_config::EasyConfigPlugin;
 use serde::Deserialize;
 use std::time::Duration;
 
-#[derive(Resource, Default, Deserialize, Asset, Clone, Copy, TypePath)]
+#[derive(Resource, Default, Deserialize, Asset, Clone, TypePath)]
 struct ShipConfig {
     speed: f32,
     damping: f32,
     speed_angular: f32,
     damping_angular: f32,
+    asset_path: String,
+    color: (f32, f32, f32),
+    fire_delay: u64,
+    fire_reload: u64,
+    fire_magazine: u32,
 }
 
 #[derive(Component)]
@@ -65,7 +70,7 @@ impl ShipBundle {
 
 fn spawn_ship(
     mut commands: Commands,
-    ship_config: Res<ShipConfig>,
+    config: Res<ShipConfig>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
@@ -76,10 +81,10 @@ fn spawn_ship(
             mesh: 0,
             primitive: 0,
         }
-        .from_asset("meshes/ship.glb"),
+        .from_asset(config.asset_path.clone()),
     );
 
-    let color = Color::srgb(0.8, 0.8, 1.0);
+    let color = Color::srgb(config.color.0, config.color.1, config.color.2);
     let material = materials.add(color);
 
     commands.spawn((
@@ -87,8 +92,8 @@ fn spawn_ship(
             0.,
             0.,
             ShipPawn::new(player_entity),
-            ship_config.damping,
-            ship_config.damping_angular,
+            config.damping,
+            config.damping_angular,
         ),
         Mesh2d(mesh),
         MeshMaterial2d(material),
@@ -97,45 +102,46 @@ fn spawn_ship(
 }
 
 fn apply_accel(
-    ship_config: Res<ShipConfig>,
+    config: Res<ShipConfig>,
     mut ships: Query<(&mut Acceleration, &ShipPawn), With<Ship>>,
     mut events: EventReader<Accelerate>,
 ) {
     for event in events.read() {
         for (mut acceleration, pawn) in ships.iter_mut() {
             if pawn.get_controller() == &event.controller {
-                acceleration.0 = ship_config.speed * event.direction;
+                acceleration.0 = config.speed * event.direction;
             }
         }
     }
 }
 
 fn apply_accel_ang(
-    ship_config: Res<ShipConfig>,
+    config: Res<ShipConfig>,
     mut ships: Query<(&mut AngularAcceleration, &ShipPawn), With<Ship>>,
     mut events: EventReader<AccelerateAngular>,
 ) {
     for event in events.read() {
         for (mut angular_accel, pawn) in ships.iter_mut() {
             if pawn.get_controller() == &event.controller {
-                angular_accel.0 = ship_config.speed_angular * event.direction;
+                angular_accel.0 = config.speed_angular * event.direction;
             }
         }
     }
 }
 
-const SHOT_SPACING: Duration = Duration::from_millis(350);
-pub fn shoot(
+//TODO! add magazine
+fn shoot(
     time: Res<Time>,
     mut ships: Query<(&Position, &Rotation, &mut TimeStamp, &ShipPawn), With<Ship>>,
     mut events: EventReader<Shoot>,
     mut create_bullet: EventWriter<CreateBullet>,
+    config: Res<ShipConfig>,
 ) {
     for event in events.read() {
         for (position, rotation, mut last_shot_time, pawn) in ships.iter_mut() {
             if pawn.get_controller() == &event.controller {
                 let time_elapsed = time.elapsed();
-                if time_elapsed - last_shot_time.0 > SHOT_SPACING {
+                if time_elapsed - last_shot_time.0 > Duration::from_millis(config.fire_delay) {
                     create_bullet.send(CreateBullet {
                         position: position.0,
                         rotation: rotation.0,
