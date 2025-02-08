@@ -1,0 +1,4 @@
+ScoreConfig(
+    font_size: 36.0,
+    margin: 18.0,
+)

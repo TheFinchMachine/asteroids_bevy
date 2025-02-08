@@ -1,5 +1,7 @@
 use crate::schedule::InGameSet;
 use bevy::prelude::*;
+use bevy_easy_config::EasyConfigPlugin;
+use serde::Deserialize;
 
 // TODO! add teams to score
 #[derive(Resource, Default)]
@@ -16,8 +18,11 @@ fn update_score(mut score: ResMut<Score>, mut events: EventReader<Scored>) {
     }
 }
 
-const SCOREBOARD_FONT_SIZE: f32 = 36.0;
-const SCOREBOARD_TEXT_MARGIN: f32 = 18.0;
+#[derive(Resource, Default, Deserialize, Asset, Clone, Copy, TypePath)]
+struct ScoreConfig {
+    font_size: f32,
+    margin: f32,
+}
 
 #[derive(Component)]
 struct PlayerScore;
@@ -26,15 +31,16 @@ fn spawn_scoreboard(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     window: Query<&Window>,
+    config: Res<ScoreConfig>,
 ) {
     if let Ok(window) = window.get_single() {
         let window_height = window.resolution.height();
-        let text_height = window_height / 2. - SCOREBOARD_TEXT_MARGIN;
+        let text_height = window_height / 2.0 - config.margin;
 
         let font = asset_server.load("fonts/FiraSans-Bold.ttf");
         let text_font = TextFont {
             font,
-            font_size: SCOREBOARD_FONT_SIZE,
+            font_size: config.font_size,
             ..default()
         };
 
@@ -60,6 +66,7 @@ pub struct ScorePlugin;
 
 impl Plugin for ScorePlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(EasyConfigPlugin::<ScoreConfig>::new("score.cfg.ron"));
         app.init_resource::<Score>();
         app.add_event::<Scored>();
         app.add_systems(Startup, spawn_scoreboard);
