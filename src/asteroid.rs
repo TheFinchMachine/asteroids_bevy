@@ -16,6 +16,10 @@ use std::time::Duration;
 #[derive(Resource, Default, Deserialize, Asset, Clone, Copy, TypePath)]
 struct AsteroidConfig {
     varients: usize,
+    num_verts: (usize, usize),
+    angle_range: f32,
+    radius_range: f32,
+    radius_base: f32,
 }
 
 #[derive(Resource)]
@@ -57,7 +61,7 @@ impl AsteroidBundle {
     }
 }
 
-pub fn load_asteroids(
+fn load_asteroids(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -68,7 +72,7 @@ pub fn load_asteroids(
 
     let mut new_meshes = Vec::with_capacity(config.varients);
     for _ in 0..config.varients {
-        new_meshes.push(meshes.add(create_astroid_mesh(&mut spawner)))
+        new_meshes.push(meshes.add(create_astroid_mesh(&mut spawner, &config)))
     }
 
     commands.insert_resource(AsteroidAssets {
@@ -77,7 +81,7 @@ pub fn load_asteroids(
     });
 }
 
-pub fn spawn_asteroid(
+fn spawn_asteroid(
     commands: &mut Commands,
     asteroid_assets: &Res<AsteroidAssets>,
     spawner: &mut ResMut<SpawnGenerator>,
@@ -96,7 +100,7 @@ pub fn spawn_asteroid(
     ));
 }
 
-pub fn spawn_asteroid_child(
+fn spawn_asteroid_child(
     commands: &mut Commands,
     asteroid_assets: &Res<AsteroidAssets>,
     spawner: &mut ResMut<SpawnGenerator>,
@@ -121,16 +125,16 @@ pub fn spawn_asteroid_child(
     );
 }
 
-fn create_astroid_mesh(spawner: &mut ResMut<SpawnGenerator>) -> Mesh {
+fn create_astroid_mesh(spawner: &mut ResMut<SpawnGenerator>, config: &Res<AsteroidConfig>) -> Mesh {
     let rng = &mut spawner.rng;
     // create semi-random circle
-    let num_verts = rng.usize(8..12);
+    let num_verts = rng.usize(config.num_verts.0..config.num_verts.1);
     let angle_step = 360.0 / num_verts as f32;
-    let angle_range = angle_step * 0.0;
+    let angle_range = angle_step * config.angle_range;
     let mut positions = Vec::with_capacity(num_verts);
 
     for i in 0..num_verts {
-        let radius = rng.f32_normalized() * 0.25 + 0.75;
+        let radius = rng.f32_normalized() * config.radius_range + config.radius_base;
         let angle = rng.f32_normalized() * (i as f32 * angle_range) + (i as f32 * angle_step);
         let rotator = Rot2::degrees(angle);
         let point = rotator * Vec2::new(0.0, radius);
@@ -201,7 +205,7 @@ fn create_astroid_mesh(spawner: &mut ResMut<SpawnGenerator>) -> Mesh {
     .with_inserted_indices(mesh::Indices::U32(indices))
 }
 
-pub fn spawn_asteroid_random(
+fn spawn_asteroid_random(
     mut commands: Commands,
     asteroid_assets: Res<AsteroidAssets>,
     mut spawner: ResMut<SpawnGenerator>,
