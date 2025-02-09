@@ -4,6 +4,7 @@ use crate::load_spawner;
 use crate::schedule::InGameSet;
 use crate::score::Scored;
 use crate::spawner::SpawnGenerator;
+use crate::GameState;
 use bevy::prelude::*;
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
@@ -325,6 +326,12 @@ fn bounce_asteroids(
     }
 }
 
+fn despawn_asteroids(mut commands: Commands, asteroids: Query<Entity, With<Asteroid>>) {
+    for entity in asteroids.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
 pub struct AsteroidsPlugin;
 
 impl Plugin for AsteroidsPlugin {
@@ -343,5 +350,6 @@ impl Plugin for AsteroidsPlugin {
             )
                 .in_set(InGameSet::EntityUpdates),
         );
+        app.add_systems(OnEnter(GameState::GameOver), despawn_asteroids);
     }
 }

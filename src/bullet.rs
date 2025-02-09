@@ -1,4 +1,4 @@
-use crate::{bodies::*, schedule::InGameSet};
+use crate::{bodies::*, schedule::InGameSet, GameState};
 use bevy::prelude::*;
 use bevy_easy_config::EasyConfigPlugin;
 use serde::Deserialize;
@@ -133,6 +133,12 @@ fn collisions_bullets(
     }
 }
 
+fn despawn_bullets(mut commands: Commands, bullets: Query<Entity, With<Bullet>>) {
+    for entity in bullets.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
 pub struct BulletPlugin;
 
 impl Plugin for BulletPlugin {
@@ -145,5 +151,6 @@ impl Plugin for BulletPlugin {
             (destroy_bullets, collisions_bullets).in_set(InGameSet::DespawnEntities),
         );
         app.add_systems(Update, (spawn_bullet).in_set(InGameSet::CollisionDetection));
+        app.add_systems(OnEnter(GameState::GameOver), despawn_bullets);
     }
 }

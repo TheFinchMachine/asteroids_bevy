@@ -1,4 +1,4 @@
-use crate::schedule::InGameSet;
+use crate::{schedule::InGameSet, GameState};
 use bevy::prelude::*;
 use bevy_easy_config::EasyConfigPlugin;
 use serde::Deserialize;
@@ -7,6 +7,12 @@ use serde::Deserialize;
 #[derive(Resource, Default)]
 struct Score {
     score: u16,
+}
+
+#[derive(Resource, Default, Deserialize, Asset, Clone, Copy, TypePath)]
+struct ScoreConfig {
+    font_size: f32,
+    margin: f32,
 }
 
 #[derive(Event)]
@@ -18,10 +24,8 @@ fn update_score(mut score: ResMut<Score>, mut events: EventReader<Scored>) {
     }
 }
 
-#[derive(Resource, Default, Deserialize, Asset, Clone, Copy, TypePath)]
-struct ScoreConfig {
-    font_size: f32,
-    margin: f32,
+fn reset_score(mut score: ResMut<Score>) {
+    score.score = 0;
 }
 
 #[derive(Component)]
@@ -74,5 +78,6 @@ impl Plugin for ScorePlugin {
             Update,
             (update_score, update_scoreboard).in_set(InGameSet::EntityUpdates),
         );
+        app.add_systems(OnEnter(GameState::GameOver), reset_score);
     }
 }

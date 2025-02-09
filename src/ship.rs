@@ -4,6 +4,7 @@ use crate::{
     control::{Pawn, PlayerController, ShipPawn},
     control_2d::{Accelerate, AccelerateAngular, Shoot},
     schedule::InGameSet,
+    GameState,
 };
 use bevy::prelude::*;
 use bevy_easy_config::EasyConfigPlugin;
@@ -158,22 +159,21 @@ fn collisions_ship(
     ships: Query<(Entity, &Collider), With<Ship>>,
     colliders: Query<(Entity, &Collider)>,
     mut collisions: EventReader<Collision>,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
     for event in collisions.read() {
-        if let Ok((ship, ship_collider)) = ships.get(event.entity1) {
-            if let Ok((_, collider)) = colliders.get(event.entity2) {
-                if collider.team != ship_collider.team {
-                    commands.entity(ship).despawn();
+        for (entity_a, entity_b) in [
+            (event.entity1, event.entity2),
+            (event.entity2, event.entity1),
+        ] {
+            if let Ok((ship, ship_collider)) = ships.get(entity_a) {
+                if let Ok((_, collider)) = colliders.get(entity_b) {
+                    if collider.team != ship_collider.team {
+                        commands.entity(ship).despawn();
+                        next_state.set(GameState::GameOver);
+                    }
                 }
             }
-        } else if let Ok((ship, ship_collider)) = ships.get(event.entity2) {
-            if let Ok((_, collider)) = colliders.get(event.entity1) {
-                if collider.team != ship_collider.team {
-                    commands.entity(ship).despawn();
-                }
-            }
-        } else {
-            continue;
         }
     }
 }
@@ -183,7 +183,7 @@ pub struct ShipPlugin;
 impl Plugin for ShipPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(EasyConfigPlugin::<ShipConfig>::new("ship.cfg.ron"));
-        app.add_systems(Startup, (spawn_ship,));
+        app.add_systems(OnEnter(GameState::InGame), (spawn_ship));
         app.add_systems(
             Update,
             (apply_accel, apply_accel_ang, shoot).in_set(InGameSet::EntityUpdates),
