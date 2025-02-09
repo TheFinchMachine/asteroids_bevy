@@ -1,6 +1,7 @@
 use asteroids::AsteroidsGamePlugin;
 use bevy::prelude::*;
 
+// test workflow
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
