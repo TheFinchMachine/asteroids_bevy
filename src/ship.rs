@@ -7,11 +7,11 @@ use crate::{
     GameState,
 };
 use bevy::prelude::*;
-use bevy_easy_config::EasyConfigPlugin;
+use bevy_common_assets::ron::RonAssetPlugin;
 use serde::Deserialize;
 use std::time::Duration;
 
-#[derive(Resource, Default, Deserialize, Asset, Clone, TypePath)]
+#[derive(Deserialize, Asset, Clone, TypePath)]
 struct ShipConfig {
     speed: f32,
     damping: f32,
@@ -27,6 +27,11 @@ struct ShipConfig {
 #[derive(Component)]
 pub struct Ship;
 
+#[derive(Component)]
+pub struct ShipConfigHandle {
+    config: Handle<ShipConfig>,
+}
+
 #[derive(Bundle)]
 struct ShipBundle {
     ship: Ship,
@@ -36,17 +41,16 @@ struct ShipBundle {
     scale: Scale,
     velocity: Velocity,
     acceleration: Acceleration,
-    damping: Damping,
+    config: ShipConfigHandle,
     angular_velocity: AngularVelocity,
     angular_acceleration: AngularAcceleration,
-    angular_damping: AngularDamping,
     last_shot: TimeStamp,
     rigid_body: RigidBody,
     collider: Collider,
 }
 
 impl ShipBundle {
-    fn new(x: f32, y: f32, pawn: ShipPawn, damping: f32, angular_damping: f32) -> Self {
+    fn new(x: f32, y: f32, pawn: ShipPawn, config: Handle<ShipConfig>) -> Self {
         Self {
             ship: Ship,
             pawn,
@@ -55,11 +59,10 @@ impl ShipBundle {
             scale: Scale(10.0),
             velocity: Velocity(Vec2::new(0., 0.)),
             acceleration: Acceleration(Vec2::new(0., 0.)),
-            damping: Damping(damping),
             angular_velocity: AngularVelocity(0.0),
             angular_acceleration: AngularAcceleration(0.0),
-            angular_damping: AngularDamping(angular_damping),
             last_shot: TimeStamp(Duration::ZERO),
+            config: ShipConfigHandle(config),
             rigid_body: RigidBody {
                 radius: 0.1,
                 mass: 2.0,
@@ -71,8 +74,8 @@ impl ShipBundle {
 
 fn spawn_ship(
     mut commands: Commands,
-    config: Res<ShipConfig>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut ships: ResMut<Assets<Ships>>,
     asset_server: Res<AssetServer>,
 ) {
     //TODO! move player spawn somewhere sensible
@@ -82,20 +85,19 @@ fn spawn_ship(
             mesh: 0,
             primitive: 0,
         }
-        .from_asset(config.asset_path.clone()),
+        // to generalize, have a ships folder in assets and load all meshes with a config file in the same folder
+        // would still be nice to not have the mesh name hardcoded...
+        .from_asset("meshes/ship.glb"),
     );
 
     let color = Color::srgb(config.color.0, config.color.1, config.color.2);
     let material = materials.add(color);
 
+    let config = asset_server.load("a.ship.ron");
+    let ship = ships.add(config);
+
     commands.spawn((
-        ShipBundle::new(
-            0.,
-            0.,
-            ShipPawn::new(player_entity),
-            config.damping,
-            config.damping_angular,
-        ),
+        ShipBundle::new(0., 0., ShipPawn::new(player_entity), ship),
         Mesh2d(mesh),
         MeshMaterial2d(material),
         Transform::default(),
@@ -103,28 +105,32 @@ fn spawn_ship(
 }
 
 fn apply_accel(
-    config: Res<ShipConfig>,
-    mut ships: Query<(&mut Acceleration, &ShipPawn), With<Ship>>,
+    configs: Res<Assets<Ships>>,
+    mut ships: Query<(&mut Acceleration, &ShipPawn, &ShipConfigHandle), With<Ship>>,
     mut events: EventReader<Accelerate>,
 ) {
     for event in events.read() {
-        for (mut acceleration, pawn) in ships.iter_mut() {
-            if pawn.get_controller() == &event.controller {
-                acceleration.0 = config.speed * event.direction;
+        for (mut acceleration, pawn, ship_config) in ships.iter_mut() {
+            if let Some(config) = configs.get(ship_config.config) {
+                if pawn.get_controller() == &event.controller {
+                    acceleration.0 = config.speed * event.direction;
+                }
             }
         }
     }
 }
 
 fn apply_accel_ang(
-    config: Res<ShipConfig>,
-    mut ships: Query<(&mut AngularAcceleration, &ShipPawn), With<Ship>>,
+    configs: Res<Assets<Ships>>,
+    mut ships: Query<(&mut AngularAcceleration, &ShipPawn, &ShipConfigHandle), With<Ship>>,
     mut events: EventReader<AccelerateAngular>,
 ) {
     for event in events.read() {
-        for (mut angular_accel, pawn) in ships.iter_mut() {
-            if pawn.get_controller() == &event.controller {
-                angular_accel.0 = config.speed_angular * event.direction;
+        for (mut angular_accel, pawn, ship_config) in ships.iter_mut() {
+            if let Some(config) = configs.get(ship_config.config) {
+                if pawn.get_controller() == &event.controller {
+                    angular_accel.0 = config.speed_angular * event.direction;
+                }
             }
         }
     }
@@ -133,21 +139,32 @@ fn apply_accel_ang(
 //TODO! add magazine
 fn shoot(
     time: Res<Time>,
-    mut ships: Query<(&Position, &Rotation, &mut TimeStamp, &ShipPawn), With<Ship>>,
+    mut ships: Query<
+        (
+            &Position,
+            &Rotation,
+            &mut TimeStamp,
+            &ShipPawn,
+            &ShipConfigHandle,
+        ),
+        With<Ship>,
+    >,
     mut events: EventReader<Shoot>,
     mut create_bullet: EventWriter<CreateBullet>,
-    config: Res<ShipConfig>,
+    configs: Res<Assets<Ships>>,
 ) {
     for event in events.read() {
-        for (position, rotation, mut last_shot_time, pawn) in ships.iter_mut() {
-            if pawn.get_controller() == &event.controller {
-                let time_elapsed = time.elapsed();
-                if time_elapsed - last_shot_time.0 > Duration::from_millis(config.fire_delay) {
-                    create_bullet.send(CreateBullet {
-                        position: position.0,
-                        rotation: rotation.0,
-                    });
-                    last_shot_time.0 = time_elapsed;
+        for (position, rotation, mut last_shot_time, pawn, ship_config) in ships.iter_mut() {
+            if let Some(config) = configs.get(ship_config.config) {
+                if pawn.get_controller() == &event.controller {
+                    let time_elapsed = time.elapsed();
+                    if time_elapsed - last_shot_time.0 > Duration::from_millis(config.fire_delay) {
+                        create_bullet.send(CreateBullet {
+                            position: position.0,
+                            rotation: rotation.0,
+                        });
+                        last_shot_time.0 = time_elapsed;
+                    }
                 }
             }
         }
@@ -182,7 +199,7 @@ pub struct ShipPlugin;
 
 impl Plugin for ShipPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(EasyConfigPlugin::<ShipConfig>::new("ship.cfg.ron"));
+        app.add_plugins(RonAssetPlugin::<ShipConfig>::new("ship.ron"));
         app.add_systems(OnEnter(GameState::InGame), (spawn_ship));
         app.add_systems(
             Update,

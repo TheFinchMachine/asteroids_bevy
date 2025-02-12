@@ -4,7 +4,7 @@ use bevy_easy_config::EasyConfigPlugin;
 use serde::Deserialize;
 use std::time::Duration;
 
-#[derive(Resource, Default, Deserialize, Asset, Clone, Copy, TypePath)]
+#[derive(Deserialize, Asset, Clone, Copy, TypePath)]
 struct BulletConfig {
     speed: f32,
     lifetime: u64,
@@ -16,6 +16,7 @@ struct BulletConfig {
 struct BulletAssets {
     mesh: Handle<Mesh>,
     material: Handle<ColorMaterial>,
+    config: Handle<BulletConfig>,
 }
 
 #[derive(Component)]
@@ -55,10 +56,11 @@ impl BulletBundle {
 }
 
 fn load_bullet(
-    mut commands: Commands,
+    mut commands: Commands,config
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    config: Res<BulletConfig>,
+    mut configs: Res<Assets<BulletConfig>>,
+    asset_server: Res<AssetServer>,
 ) {
     let shape = Circle::new(config.size);
     let color = Color::srgb(config.color.0, config.color.1, config.color.2);
@@ -66,7 +68,10 @@ fn load_bullet(
     let mesh = meshes.add(shape);
     let material = materials.add(color);
 
-    commands.insert_resource(BulletAssets { mesh, material })
+    let config_file = asset_server.load("a.bullet.cfg.ron");
+    let config = configs.add(config_file)
+
+    commands.insert_resource(BulletAssets { mesh, material, config })
 }
 
 #[derive(Event, Debug)]

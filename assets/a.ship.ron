@@ -3,7 +3,6 @@ ShipConfig(
     damping: 0.5,
     speed_angular: 36.0,
     damping_angular: 10.0,
-    asset_path: "meshes/ship.glb",
     color: (1.0, 1.0, 1.0),
     fire_delay: 350,
     //unused
