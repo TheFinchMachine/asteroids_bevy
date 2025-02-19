@@ -86,8 +86,10 @@ struct ShipBundle {
     scale: Scale,
     velocity: Velocity,
     acceleration: Acceleration,
+    damping: Damping,
     angular_velocity: AngularVelocity,
     angular_acceleration: AngularAcceleration,
+    angular_damping: AngularDamping,
     last_shot: TimeStamp,
     rigid_body: RigidBody,
     collider: Collider,
@@ -103,8 +105,10 @@ impl ShipBundle {
             scale: Scale(10.0),
             velocity: Velocity(Vec2::new(0., 0.)),
             acceleration: Acceleration(Vec2::new(0., 0.)),
+            damping: Damping(0.0),
             angular_velocity: AngularVelocity(0.0),
             angular_acceleration: AngularAcceleration(0.0),
+            angular_damping: AngularDamping(0.0),
             last_shot: TimeStamp(Duration::ZERO),
             rigid_body: RigidBody {
                 radius: 0.1,
@@ -123,34 +127,27 @@ fn spawn_ship(
 
     commands.spawn((
         ShipBundle::new(0., 0., ShipPawn::new(player_entity)),
-        NeedsMesh,
-        NeedsMaterial,
+        NeedsConfig,
         Transform::default(),
     ));
 }
 
-fn add_mesh(
+fn add_config(
     mut commands: Commands,
-    mut ships: Query<(Entity, &mut NeedsMesh), With<Ship>>,
+    mut ships: Query<(Entity, &mut Damping, &mut AngularDamping, &mut NeedsConfig), With<Ship>>,
     ship_assets: Option<Res<ShipAsset>>,
+    configs: Res<Assets<ShipConfig>>,
+    config_handle: Res<ShipConfigHandle>,
 ) {
     if let Some(assets) = ship_assets {
-        for (entity, _) in ships.iter_mut() {
-            commands.entity(entity).insert(Mesh2d(assets.mesh.clone()));
-            commands.entity(entity).remove::<NeedsMesh>();
-        }
-    }
-}
-
-fn add_material(
-    mut commands: Commands,
-    mut ships: Query<(Entity, &mut NeedsMaterial), With<Ship>>,
-    ship_assets: Option<Res<ShipAsset>>,
-) {
-    if let Some(assets) = ship_assets {
-        for (entity, _) in ships.iter_mut() {
-            commands.entity(entity).insert(MeshMaterial2d(assets.material.clone()));
-            commands.entity(entity).remove::<NeedsMaterial>();
+        if let Some(config) = configs.get(config_handle.config.id()) {
+            for (entity, mut damping, mut angular_damping, _) in ships.iter_mut() {
+                damping.0 = config.damping;
+                angular_damping.0 = config.damping_angular;
+                commands.entity(entity).insert(Mesh2d(assets.mesh.clone()));
+                commands.entity(entity).insert(MeshMaterial2d(assets.material.clone()));
+                commands.entity(entity).remove::<NeedsConfig>();
+            }
         }
     }
 }
@@ -253,8 +250,9 @@ pub struct ShipPlugin;
 impl Plugin for ShipPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(RonAssetPlugin::<ShipConfig>::new(&["ship.ron"]));
-        app.add_systems(Startup, (load_config, spawn_ship));
-        app.add_systems(Update, (load_assets, add_mesh, add_material).in_set(InGameSet::LoadEntities));
+        app.add_systems(Startup, (load_config));
+        app.add_systems(OnEnter(GameState::InGame), spawn_ship);
+        app.add_systems(Update, (load_assets, add_config ).in_set(InGameSet::LoadEntities));
         app.add_systems(
             Update,
             (apply_accel, apply_accel_ang, shoot).in_set(InGameSet::UpdateEntities),

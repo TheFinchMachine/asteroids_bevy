@@ -102,19 +102,21 @@ pub struct CreateBullet {
 fn spawn_bullet(
     mut commands: Commands,
     mut events: EventReader<CreateBullet>,
-    bullet_assets: Res<BulletAssets>,
+    bullet_assets: Option<Res<BulletAssets>>,
     time: Res<Time>,
     configs: Res<Assets<BulletConfig>>,
     config_handle: Res<BulletConfigHandle>,
 ) {
     if let Some(config) = configs.get(config_handle.config.id()) {
-        for event in events.read() {
-            commands.spawn((
-                BulletBundle::new(event.position, event.rotation, time.elapsed(), config.speed),
-                Mesh2d(bullet_assets.mesh.clone()),
-                MeshMaterial2d(bullet_assets.material.clone()),
-                Transform::default(),
-            ));
+        if let Some(assets) = bullet_assets {
+            for event in events.read() {
+                commands.spawn((
+                    BulletBundle::new(event.position, event.rotation, time.elapsed(), config.speed),
+                    Mesh2d(assets.mesh.clone()),
+                    MeshMaterial2d(assets.material.clone()),
+                    Transform::default(),
+                ));
+            }
         }
     }
 }
