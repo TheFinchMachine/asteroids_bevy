@@ -6,10 +6,11 @@ use crate::GameState;
 pub enum InGameSet {
     GameInput,
     MenuInput,
-    EntityUpdates,
+    LoadEntities,
+    DespawnEntities,
+    UpdateEntities,
     CollisionDetection,
     RenderSetup,
-    DespawnEntities,
 }
 
 pub struct SchudulePlugin;
@@ -19,10 +20,11 @@ impl Plugin for SchudulePlugin {
         app.configure_sets(
             Update,
             (
+                InGameSet::LoadEntities,
                 InGameSet::DespawnEntities,
                 // apply_deferred(Flush)
                 InGameSet::GameInput,
-                InGameSet::EntityUpdates,
+                InGameSet::UpdateEntities,
                 InGameSet::CollisionDetection,
                 InGameSet::RenderSetup,
             )

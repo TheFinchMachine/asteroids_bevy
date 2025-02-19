@@ -7,14 +7,9 @@ struct RestartMessage;
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 pub enum GameState {
     #[default]
-    Load,
     InGame,
     Paused,
     GameOver,
-}
-
-fn start_game(mut next_state: ResMut<NextState<GameState>>) {
-    next_state.set(GameState::InGame);
 }
 
 fn pause_system(
@@ -87,7 +82,6 @@ pub struct StatePlugin;
 impl Plugin for StatePlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<GameState>();
-        app.add_systems(PostStartup, start_game);
         app.add_systems(
             Update,
             (pause_system, restart_game).in_set(InGameSet::MenuInput),

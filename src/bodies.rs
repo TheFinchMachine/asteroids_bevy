@@ -34,6 +34,15 @@ pub struct AngularDamping(pub f32);
 pub struct Scale(pub f32);
 
 #[derive(Component)]
+pub struct NeedsMesh;
+
+#[derive(Component)]
+pub struct NeedsConfig;
+
+#[derive(Component)]
+pub struct NeedsMaterial;
+
+#[derive(Component)]
 pub struct RigidBody {
     pub radius: f32,
     pub mass: f32,
@@ -149,13 +158,13 @@ impl Plugin for BodiesPlugin {
             Update,
             (update_velocity, update_position, damping)
                 .chain()
-                .in_set(InGameSet::EntityUpdates),
+                .in_set(InGameSet::UpdateEntities),
         );
         app.add_systems(
             Update,
             (update_angular_velocity, update_rotation, damping_angular)
                 .chain()
-                .in_set(InGameSet::EntityUpdates),
+                .in_set(InGameSet::UpdateEntities),
         );
         app.add_systems(Update, (collisions).in_set(InGameSet::CollisionDetection));
     }

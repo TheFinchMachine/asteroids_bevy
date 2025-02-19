@@ -24,10 +24,14 @@ struct AsteroidConfig {
 }
 
 #[derive(Resource)]
+struct AsteroidConfigHandle {
+    config: Handle<AsteroidConfig>,
+}
+
+#[derive(Resource)]
 struct AsteroidAssets {
     meshes: Vec<Handle<Mesh>>,
     material: Handle<ColorMaterial>,
-    config: Handle<AsteroidConfig>,
 }
 
 #[derive(Component)]
@@ -63,29 +67,41 @@ impl AsteroidBundle {
     }
 }
 
+fn load_config(
+    asset_server: Res<AssetServer>,
+    mut commands: Commands,
+) {
+    let config = asset_server.load("a.ast.ron");
+    commands.insert_resource(AsteroidConfigHandle {
+        config,
+    });
+}
+
 fn load_asteroids(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut spawner: ResMut<SpawnGenerator>,
-    mut configs: ResMut<Assets<AsteroidConfig>>,
-    asset_server: Res<AssetServer>,
+    configs: Res<Assets<AsteroidConfig>>,
+    config_handle: Res<AsteroidConfigHandle>,
+    asteroid_assets: Option<Res<AsteroidAssets>>,
 ) {
-    let material = materials.add(Color::srgb(0.5, 1., 0.5));
-
-    let mut new_meshes = Vec::with_capacity(config.varients);
-    for _ in 0..config.varients {
-        new_meshes.push(meshes.add(create_astroid_mesh(&mut spawner, &config)))
+    if asteroid_assets.is_some(){
+        return;
     }
+    if let Some(config) = configs.get(config_handle.config.id()) {
+        let material = materials.add(Color::srgb(0.5, 1., 0.5));
 
-    let config_file = asset_server.load("a.ast.ron");
-    let config = configs.add(config_file);
+        let mut new_meshes = Vec::with_capacity(config.varients);
+        for _ in 0..config.varients {
+            new_meshes.push(meshes.add(create_astroid_mesh(&mut spawner, &config)));
+        }
 
-    commands.insert_resource(AsteroidAssets {
-        meshes: new_meshes,
-        material,
-        config,
-    });
+        commands.insert_resource(AsteroidAssets {
+            meshes: new_meshes,
+            material,
+        });
+    }
 }
 
 fn spawn_asteroid(
@@ -218,6 +234,7 @@ fn spawn_asteroid_random(
     mut spawner: ResMut<SpawnGenerator>,
     grid: Res<Grid>,
     configs: Res<Assets<AsteroidConfig>>,
+    config_handle: Res<AsteroidConfigHandle>,
 ) {
     // spawn position offscreen inside grid extents
     let x_dist = spawner.rng.f32_normalized() * grid.extends;
@@ -241,7 +258,7 @@ fn spawn_asteroid_random(
     let scale = spawner.rng.f32() * 5.0 + 45.0;
     let angular_velocity = spawner.rng.f32_normalized() * 1.0;
 
-    if let Some(config) = configs.get(asteroid_assets.config) {
+    if let Some(config) = configs.get(config_handle.config.id()) {
         spawn_asteroid(
             &mut commands,
             &asteroid_assets,
@@ -258,50 +275,53 @@ fn spawn_asteroid_random(
 // TODO! switch spawning children to an event
 fn destroy_asteroids(
     mut commands: Commands,
-    asteroid_assets: Res<AsteroidAssets>,
+    asteroid_assets: Option<Res<AsteroidAssets>>,
     mut spawner: ResMut<SpawnGenerator>,
     asteroids: Query<(Entity, &Collider, &Position, &Velocity, &Scale), With<Asteroid>>,
     colliders: Query<&Collider>,
     mut collisions: EventReader<Collision>,
     mut score: EventWriter<Scored>,
     configs: Res<Assets<AsteroidConfig>>,
+    config_handle: Res<AsteroidConfigHandle>,
 ) {
-    if let Some(config) = configs.get(asteroid_assets.config) {
-        for event in collisions.read() {
-            for (entity_a, entity_b) in [
-                (event.entity1, event.entity2),
-                (event.entity2, event.entity1),
-            ] {
-                if let Ok((ast_entity, ast_collider, ast_pos, ast_vel, ast_scale)) =
-                    asteroids.get(entity_a)
-                {
-                    if let Ok(collider) = colliders.get(entity_b) {
-                        if collider.team != ast_collider.team {
-                            // TODO! add teams to score
-                            score.send(Scored);
-                            if ast_scale.0 > 25.0 {
-                                spawn_asteroid_child(
-                                    &mut commands,
-                                    &asteroid_assets,
-                                    &mut spawner,
-                                    &config,
-                                    ast_pos.0,
-                                    ast_vel.0,
-                                    ast_scale.0,
-                                    50.0,
-                                );
-                                spawn_asteroid_child(
-                                    &mut commands,
-                                    &asteroid_assets,
-                                    &mut spawner,
-                                    &config,
-                                    ast_pos.0,
-                                    ast_vel.0,
-                                    ast_scale.0,
-                                    -50.0,
-                                );
+    if let Some(config) = configs.get(config_handle.config.id()) {
+        if let Some(assets) = asteroid_assets {
+            for event in collisions.read() {
+                for (entity_a, entity_b) in [
+                    (event.entity1, event.entity2),
+                    (event.entity2, event.entity1),
+                ] {
+                    if let Ok((ast_entity, ast_collider, ast_pos, ast_vel, ast_scale)) =
+                        asteroids.get(entity_a)
+                    {
+                        if let Ok(collider) = colliders.get(entity_b) {
+                            if collider.team != ast_collider.team {
+                                // TODO! add teams to score
+                                score.send(Scored);
+                                if ast_scale.0 > 25.0 {
+                                    spawn_asteroid_child(
+                                        &mut commands,
+                                        &assets,
+                                        &mut spawner,
+                                        &config,
+                                        ast_pos.0,
+                                        ast_vel.0,
+                                        ast_scale.0,
+                                        50.0,
+                                    );
+                                    spawn_asteroid_child(
+                                        &mut commands,
+                                        &assets,
+                                        &mut spawner,
+                                        &config,
+                                        ast_pos.0,
+                                        ast_vel.0,
+                                        ast_scale.0,
+                                        -50.0,
+                                    );
+                                }
+                                commands.entity(ast_entity).despawn();
                             }
-                            commands.entity(ast_entity).despawn();
                         }
                     }
                 }
@@ -346,8 +366,9 @@ pub struct AsteroidsPlugin;
 
 impl Plugin for AsteroidsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(RonAssetPlugin::<AsteroidConfig>::new("ast.ron"));
-        app.add_systems(Startup, (load_spawner, load_asteroids.after(load_spawner)));
+        app.add_plugins(RonAssetPlugin::<AsteroidConfig>::new(&["ast.ron"]));
+        app.add_systems(Startup, (load_spawner, load_config));
+        app.add_systems(Update, (load_asteroids).in_set(InGameSet::LoadEntities));
         app.add_systems(
             Update,
             (destroy_asteroids).in_set(InGameSet::DespawnEntities),
@@ -358,7 +379,7 @@ impl Plugin for AsteroidsPlugin {
                 bounce_asteroids,
                 spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
             )
-                .in_set(InGameSet::EntityUpdates),
+                .in_set(InGameSet::UpdateEntities),
         );
         app.add_systems(OnEnter(GameState::GameOver), despawn_asteroids);
     }

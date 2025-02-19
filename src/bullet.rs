@@ -1,6 +1,6 @@
 use crate::{bodies::*, schedule::InGameSet, GameState};
 use bevy::prelude::*;
-use bevy_easy_config::EasyConfigPlugin;
+use bevy_common_assets::ron::RonAssetPlugin;
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -13,10 +13,14 @@ struct BulletConfig {
 }
 
 #[derive(Resource)]
+struct BulletConfigHandle {
+    config: Handle<BulletConfig>,
+}
+
+#[derive(Resource)]
 struct BulletAssets {
     mesh: Handle<Mesh>,
     material: Handle<ColorMaterial>,
-    config: Handle<BulletConfig>,
 }
 
 #[derive(Component)]
@@ -55,23 +59,36 @@ impl BulletBundle {
     }
 }
 
+fn load_config(
+    asset_server: Res<AssetServer>,
+    mut commands: Commands,
+) {
+    let config = asset_server.load("a.bullet.ron");
+    commands.insert_resource(BulletConfigHandle {
+        config,
+    });
+}
+
 fn load_bullet(
-    mut commands: Commands,config
+    mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut configs: Res<Assets<BulletConfig>>,
-    asset_server: Res<AssetServer>,
+    configs: Res<Assets<BulletConfig>>,
+    config_handle: Res<BulletConfigHandle>,
+    bullet_assets: Option<Res<BulletAssets>>,
 ) {
-    let shape = Circle::new(config.size);
-    let color = Color::srgb(config.color.0, config.color.1, config.color.2);
+    if bullet_assets.is_some() {
+        return;
+    }
+    if let Some(config) = configs.get(config_handle.config.id()) {
+        let shape = Circle::new(config.size);
+        let color = Color::srgb(config.color.0, config.color.1, config.color.2);
 
-    let mesh = meshes.add(shape);
-    let material = materials.add(color);
+        let mesh = meshes.add(shape);
+        let material = materials.add(color);
 
-    let config_file = asset_server.load("a.bullet.cfg.ron");
-    let config = configs.add(config_file)
-
-    commands.insert_resource(BulletAssets { mesh, material, config })
+        commands.insert_resource(BulletAssets { mesh, material});
+    }
 }
 
 #[derive(Event, Debug)]
@@ -87,15 +104,18 @@ fn spawn_bullet(
     mut events: EventReader<CreateBullet>,
     bullet_assets: Res<BulletAssets>,
     time: Res<Time>,
-    config: Res<BulletConfig>,
+    configs: Res<Assets<BulletConfig>>,
+    config_handle: Res<BulletConfigHandle>,
 ) {
-    for event in events.read() {
-        commands.spawn((
-            BulletBundle::new(event.position, event.rotation, time.elapsed(), config.speed),
-            Mesh2d(bullet_assets.mesh.clone()),
-            MeshMaterial2d(bullet_assets.material.clone()),
-            Transform::default(),
-        ));
+    if let Some(config) = configs.get(config_handle.config.id()) {
+        for event in events.read() {
+            commands.spawn((
+                BulletBundle::new(event.position, event.rotation, time.elapsed(), config.speed),
+                Mesh2d(bullet_assets.mesh.clone()),
+                MeshMaterial2d(bullet_assets.material.clone()),
+                Transform::default(),
+            ));
+        }
     }
 }
 
@@ -103,12 +123,15 @@ fn destroy_bullets(
     mut commands: Commands,
     bullets: Query<(Entity, &TimeStamp), With<Bullet>>,
     time: Res<Time>,
-    config: Res<BulletConfig>,
+    configs: Res<Assets<BulletConfig>>,
+    config_handle: Res<BulletConfigHandle>,
 ) {
-    let time_elapsed = time.elapsed();
-    for (entity, spawn_time) in &bullets {
-        if time_elapsed - spawn_time.0 > Duration::from_millis(config.lifetime) {
-            commands.entity(entity).despawn();
+    if let Some(config) = configs.get(config_handle.config.id()) {
+        let time_elapsed = time.elapsed();
+        for (entity, spawn_time) in &bullets {
+            if time_elapsed - spawn_time.0 > Duration::from_millis(config.lifetime) {
+                commands.entity(entity).despawn();
+            }
         }
     }
 }
@@ -149,8 +172,9 @@ pub struct BulletPlugin;
 impl Plugin for BulletPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<CreateBullet>();
-        app.add_plugins(EasyConfigPlugin::<BulletConfig>::new("bullet.cfg.ron"));
-        app.add_systems(Startup, load_bullet);
+        app.add_plugins(RonAssetPlugin::<BulletConfig>::new(&["bullet.ron"]));
+        app.add_systems(Startup, load_config);
+        app.add_systems(Update, (load_bullet).in_set(InGameSet::LoadEntities));
         app.add_systems(
             Update,
             (destroy_bullets, collisions_bullets).in_set(InGameSet::DespawnEntities),

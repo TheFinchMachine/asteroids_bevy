@@ -17,20 +17,65 @@ struct ShipConfig {
     damping: f32,
     speed_angular: f32,
     damping_angular: f32,
-    asset_path: String,
+    mesh_path: String,
     color: (f32, f32, f32),
     fire_delay: u64,
     fire_reload: u64,
     fire_magazine: u32,
 }
 
-#[derive(Component)]
-pub struct Ship;
-
-#[derive(Component)]
-pub struct ShipConfigHandle {
+#[derive(Resource)]
+struct ShipConfigHandle {
     config: Handle<ShipConfig>,
 }
+
+#[derive(Resource)]
+struct ShipAsset {
+    mesh: Handle<Mesh>,
+    material: Handle<ColorMaterial>,
+}
+
+fn load_config(
+    asset_server: Res<AssetServer>,
+    mut commands: Commands,
+) {
+    let config = asset_server.load("a.ship.ron");
+    commands.insert_resource(ShipConfigHandle {
+        config
+    });
+}
+
+fn load_assets(
+    asset_server: Res<AssetServer>,
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    configs: Res<Assets<ShipConfig>>,
+    config_handle: Res<ShipConfigHandle>,
+    ship_asset: Option<Res<ShipAsset>>,
+) {
+    if ship_asset.is_some() {
+        return;
+    }
+    if let Some(config) = configs.get(config_handle.config.id()) {
+        let mesh: Handle<Mesh> = asset_server.load(
+            GltfAssetLabel::Primitive {
+                mesh: 0,
+                primitive: 0,
+            }
+            .from_asset(config.mesh_path.clone()),
+        );
+        let color = Color::srgb(config.color.0, config.color.1, config.color.2);
+        let material = materials.add(color);
+        commands.insert_resource(ShipAsset {
+            mesh,
+            material,
+        });
+    }
+}
+
+
+#[derive(Component)]
+pub struct Ship;
 
 #[derive(Bundle)]
 struct ShipBundle {
@@ -41,7 +86,6 @@ struct ShipBundle {
     scale: Scale,
     velocity: Velocity,
     acceleration: Acceleration,
-    config: ShipConfigHandle,
     angular_velocity: AngularVelocity,
     angular_acceleration: AngularAcceleration,
     last_shot: TimeStamp,
@@ -50,7 +94,7 @@ struct ShipBundle {
 }
 
 impl ShipBundle {
-    fn new(x: f32, y: f32, pawn: ShipPawn, config: Handle<ShipConfig>) -> Self {
+    fn new(x: f32, y: f32, pawn: ShipPawn) -> Self {
         Self {
             ship: Ship,
             pawn,
@@ -62,7 +106,6 @@ impl ShipBundle {
             angular_velocity: AngularVelocity(0.0),
             angular_acceleration: AngularAcceleration(0.0),
             last_shot: TimeStamp(Duration::ZERO),
-            config: ShipConfigHandle(config),
             rigid_body: RigidBody {
                 radius: 0.1,
                 mass: 2.0,
@@ -72,46 +115,55 @@ impl ShipBundle {
     }
 }
 
+
 fn spawn_ship(
     mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    mut ships: ResMut<Assets<Ships>>,
-    asset_server: Res<AssetServer>,
 ) {
-    //TODO! move player spawn somewhere sensible
     let player_entity = commands.spawn(PlayerController { id: 0 }).id();
-    let mesh = asset_server.load(
-        GltfAssetLabel::Primitive {
-            mesh: 0,
-            primitive: 0,
-        }
-        // to generalize, have a ships folder in assets and load all meshes with a config file in the same folder
-        // would still be nice to not have the mesh name hardcoded...
-        .from_asset("meshes/ship.glb"),
-    );
-
-    let color = Color::srgb(config.color.0, config.color.1, config.color.2);
-    let material = materials.add(color);
-
-    let config = asset_server.load("a.ship.ron");
-    let ship = ships.add(config);
 
     commands.spawn((
-        ShipBundle::new(0., 0., ShipPawn::new(player_entity), ship),
-        Mesh2d(mesh),
-        MeshMaterial2d(material),
+        ShipBundle::new(0., 0., ShipPawn::new(player_entity)),
+        NeedsMesh,
+        NeedsMaterial,
         Transform::default(),
     ));
 }
 
+fn add_mesh(
+    mut commands: Commands,
+    mut ships: Query<(Entity, &mut NeedsMesh), With<Ship>>,
+    ship_assets: Option<Res<ShipAsset>>,
+) {
+    if let Some(assets) = ship_assets {
+        for (entity, _) in ships.iter_mut() {
+            commands.entity(entity).insert(Mesh2d(assets.mesh.clone()));
+            commands.entity(entity).remove::<NeedsMesh>();
+        }
+    }
+}
+
+fn add_material(
+    mut commands: Commands,
+    mut ships: Query<(Entity, &mut NeedsMaterial), With<Ship>>,
+    ship_assets: Option<Res<ShipAsset>>,
+) {
+    if let Some(assets) = ship_assets {
+        for (entity, _) in ships.iter_mut() {
+            commands.entity(entity).insert(MeshMaterial2d(assets.material.clone()));
+            commands.entity(entity).remove::<NeedsMaterial>();
+        }
+    }
+}
+
 fn apply_accel(
-    configs: Res<Assets<Ships>>,
-    mut ships: Query<(&mut Acceleration, &ShipPawn, &ShipConfigHandle), With<Ship>>,
+    configs: Res<Assets<ShipConfig>>,
+    config_handle: Res<ShipConfigHandle>,
+    mut ships: Query<(&mut Acceleration, &ShipPawn), With<Ship>>,
     mut events: EventReader<Accelerate>,
 ) {
     for event in events.read() {
-        for (mut acceleration, pawn, ship_config) in ships.iter_mut() {
-            if let Some(config) = configs.get(ship_config.config) {
+        for (mut acceleration, pawn) in ships.iter_mut() {
+            if let Some(config) = configs.get(config_handle.config.id()) {
                 if pawn.get_controller() == &event.controller {
                     acceleration.0 = config.speed * event.direction;
                 }
@@ -121,13 +173,14 @@ fn apply_accel(
 }
 
 fn apply_accel_ang(
-    configs: Res<Assets<Ships>>,
-    mut ships: Query<(&mut AngularAcceleration, &ShipPawn, &ShipConfigHandle), With<Ship>>,
+    configs: Res<Assets<ShipConfig>>,
+    config_handle: Res<ShipConfigHandle>,
+    mut ships: Query<(&mut AngularAcceleration, &ShipPawn), With<Ship>>,
     mut events: EventReader<AccelerateAngular>,
 ) {
     for event in events.read() {
-        for (mut angular_accel, pawn, ship_config) in ships.iter_mut() {
-            if let Some(config) = configs.get(ship_config.config) {
+        for (mut angular_accel, pawn) in ships.iter_mut() {
+            if let Some(config) = configs.get(config_handle.config.id()) {
                 if pawn.get_controller() == &event.controller {
                     angular_accel.0 = config.speed_angular * event.direction;
                 }
@@ -144,18 +197,18 @@ fn shoot(
             &Position,
             &Rotation,
             &mut TimeStamp,
-            &ShipPawn,
-            &ShipConfigHandle,
+            &ShipPawn
         ),
         With<Ship>,
     >,
     mut events: EventReader<Shoot>,
     mut create_bullet: EventWriter<CreateBullet>,
-    configs: Res<Assets<Ships>>,
+    configs: Res<Assets<ShipConfig>>,
+    config_handle: Res<ShipConfigHandle>,
 ) {
     for event in events.read() {
-        for (position, rotation, mut last_shot_time, pawn, ship_config) in ships.iter_mut() {
-            if let Some(config) = configs.get(ship_config.config) {
+        for (position, rotation, mut last_shot_time, pawn) in ships.iter_mut() {
+            if let Some(config) = configs.get(config_handle.config.id()) {
                 if pawn.get_controller() == &event.controller {
                     let time_elapsed = time.elapsed();
                     if time_elapsed - last_shot_time.0 > Duration::from_millis(config.fire_delay) {
@@ -199,11 +252,12 @@ pub struct ShipPlugin;
 
 impl Plugin for ShipPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(RonAssetPlugin::<ShipConfig>::new("ship.ron"));
-        app.add_systems(OnEnter(GameState::InGame), (spawn_ship));
+        app.add_plugins(RonAssetPlugin::<ShipConfig>::new(&["ship.ron"]));
+        app.add_systems(Startup, (load_config, spawn_ship));
+        app.add_systems(Update, (load_assets, add_mesh, add_material).in_set(InGameSet::LoadEntities));
         app.add_systems(
             Update,
-            (apply_accel, apply_accel_ang, shoot).in_set(InGameSet::EntityUpdates),
+            (apply_accel, apply_accel_ang, shoot).in_set(InGameSet::UpdateEntities),
         );
         app.add_systems(Update, (collisions_ship).in_set(InGameSet::DespawnEntities));
     }
