@@ -1,0 +1,7 @@
+AsteroidConfig(
+    varients: 100,
+    num_verts: (8, 10),
+    angle_range: 0.0,
+    radius_range: 0.25,
+    radius_base: 0.75,
+)

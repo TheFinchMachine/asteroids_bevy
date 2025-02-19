@@ -1,0 +1,12 @@
+ShipConfig(
+    speed: 4.0,
+    damping: 0.5,
+    speed_angular: 36.0,
+    damping_angular: 10.0,
+    color: (1.0, 1.0, 1.0),
+    mesh_path: "meshes/ship.glb",
+    fire_delay: 350,
+    //unused
+    fire_reload: 500,
+    fire_magazine: 5,
+)
