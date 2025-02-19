@@ -21,7 +21,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install wasm-bindgen-cli
-        run: cargo install -f wasm-bindgen-cli --version 0.2.99
+        run: cargo install -f wasm-bindgen-cli --version 0.2.100
 
       - name: Build Project for WASM
         run: |
