@@ -136,15 +136,15 @@ fn spawn_asteroid_child(
     offset: f32,
 ) {
     let vel_len = velocity.length();
-    let vel_offset1 = Rot2::degrees(offset) * velocity.normalize();
+    let vel_offset1 = Rot2::degrees(180.0-offset) * velocity.normalize();
     let ang_vel = spawner.rng.f32_normalized();
     spawn_asteroid(
         commands,
         asteroid_assets,
         spawner,
         config,
-        position + vel_offset1 * scale * 0.001,
-        vel_offset1 * vel_len * 0.75,
+        position + vel_offset1 * scale * 0.0005,
+        vel_offset1 * vel_len * -0.75,
         ang_vel,
         scale / 1.5,
     );
