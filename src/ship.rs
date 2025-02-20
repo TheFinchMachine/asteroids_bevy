@@ -250,8 +250,8 @@ pub struct ShipPlugin;
 impl Plugin for ShipPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(RonAssetPlugin::<ShipConfig>::new(&["ship.ron"]));
-        app.add_systems(Startup, (load_config));
-        app.add_systems(OnEnter(GameState::InGame), spawn_ship);
+        app.add_systems(Startup, (load_config, spawn_ship));
+        app.add_systems(OnExit(GameState::GameOver), spawn_ship);
         app.add_systems(Update, (load_assets, add_config ).in_set(InGameSet::LoadEntities));
         app.add_systems(
             Update,
