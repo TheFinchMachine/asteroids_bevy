@@ -223,6 +223,7 @@ dependencies = [
  "log",
  "serde",
  "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

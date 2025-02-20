@@ -13,6 +13,8 @@ use bevy_common_assets::ron::RonAssetPlugin;
 use bevy_turborand::prelude::*;
 use serde::Deserialize;
 use std::time::Duration;
+//use web_sys::console;
+
 
 #[derive(Deserialize, Asset, Clone, Copy, TypePath)]
 struct AsteroidConfig {
@@ -339,6 +341,13 @@ fn bounce_asteroids(
             [(mut ast_a_pos, mut ast_a_vel, ast_a_body), (mut ast_b_pos, mut ast_b_vel, ast_b_body)],
         ) = asteroids.get_many_mut([event.entity1, event.entity2])
         {
+            //console::log_1(&"Received CollisionEvent".into());
+
+            /*console::log_1(&format!(
+                "Before Collision: A Vel: {:?}, B Vel: {:?}",
+                ast_a_vel.0, ast_b_vel.0
+            )
+            .into());*/
             let normal = event.dir.normalize();
             (ast_a_vel.0, ast_b_vel.0) = collision_bounce(
                 ast_a_vel.0,
@@ -347,9 +356,14 @@ fn bounce_asteroids(
                 ast_a_body.mass,
                 ast_b_body.mass,
             );
+            /*console::log_1(&format!(
+                "After Collision: A Vel: {:?}, B Vel: {:?}",
+                ast_a_vel.0, ast_b_vel.0
+            )
+            .into());*/
 
             let depth = event.collide_dist - event.dist;
-            let correction = normal * (depth * 0.5);
+            let correction = normal * (depth * 0.8);
             ast_a_pos.0 -= correction;
             ast_b_pos.0 += correction;
         }
@@ -376,11 +390,11 @@ impl Plugin for AsteroidsPlugin {
         app.add_systems(
             Update,
             (
-                bounce_asteroids,
                 spawn_asteroid_random.run_if(on_timer(Duration::from_secs(2))),
             )
                 .in_set(InGameSet::UpdateEntities),
         );
+        app.add_systems(Update, (bounce_asteroids).in_set(InGameSet::CollisionReaction));
         app.add_systems(OnEnter(GameState::GameOver), despawn_asteroids);
     }
 }

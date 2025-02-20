@@ -1,6 +1,8 @@
 use crate::schedule::InGameSet;
 use bevy::prelude::*;
 use std::time::Duration;
+//use web_sys::console;
+
 
 #[derive(Component)]
 pub struct TimeStamp(pub Duration);
@@ -103,6 +105,7 @@ fn collisions(
     while let Some([(entity1, pos1, body1), (entity2, pos2, body2)]) = combinations.fetch_next() {
         let (dir, dist, collide_dist) = collide(pos1.0, pos2.0, body1.radius, body2.radius);
         if dist < collide_dist {
+            //console::log_1(&"Sending CollisionEvent".into());
             collision_writer.send(Collision {
                 entity1,
                 entity2,

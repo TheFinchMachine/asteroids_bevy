@@ -181,7 +181,7 @@ impl Plugin for BulletPlugin {
             Update,
             (destroy_bullets, collisions_bullets).in_set(InGameSet::DespawnEntities),
         );
-        app.add_systems(Update, (spawn_bullet).in_set(InGameSet::CollisionDetection));
+        app.add_systems(Update, (spawn_bullet).in_set(InGameSet::CollisionReaction));
         app.add_systems(OnEnter(GameState::GameOver), despawn_bullets);
     }
 }

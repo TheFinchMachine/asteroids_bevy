@@ -10,6 +10,7 @@ pub enum InGameSet {
     DespawnEntities,
     UpdateEntities,
     CollisionDetection,
+    CollisionReaction,
     RenderSetup,
 }
 
@@ -26,6 +27,7 @@ impl Plugin for SchudulePlugin {
                 InGameSet::GameInput,
                 InGameSet::UpdateEntities,
                 InGameSet::CollisionDetection,
+                InGameSet::CollisionReaction,
                 InGameSet::RenderSetup,
             )
                 .chain()
