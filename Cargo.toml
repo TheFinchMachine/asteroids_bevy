@@ -13,9 +13,10 @@ log = { version = "*", features = [
 ] }
 bevy_turborand = "0.10.0"
 wasm-bindgen = "=0.2.100"
-bevy_common_assets = {version="0.12", features = ["ron"]}
+#bevy_common_assets = {version="0.12", features = ["ron"]}
 serde = { version = "1" } # Needed for bevy_common_assets
 web-sys = "0.3.77"
+bevy_asset_loader = "0.22"
 
 [profile.dev]
 opt-level = 1
