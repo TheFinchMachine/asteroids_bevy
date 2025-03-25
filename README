@@ -1,0 +1,40 @@
+A simple asteroids implemtation in Bevy for education purposes.
+
+Requires rust nightly.
+The mold linker is also required to build on Linux.
+
+Setup for Arch systems:
+```bash
+# install git
+pacman -S git
+# install mold linker
+pacman -S mold clang
+# install rustup for rust versioning
+pacman -S rustup
+# use rustup to install rust nightly
+rustup install nightly
+```
+
+Setup for debian systems:
+```bash
+# install git
+apt-get install git
+# install mold linker
+apt-get install mold clang
+# install rustup for rust versioning
+apt-get install rustup
+# use rustup to install rust nightly
+rustup install nightly
+```
+For install information for other platforms, see the Bevy setup guide: https://bevyengine.org/learn/quick-start/getting-started/setup/#installing-rust
+
+After system packages have been installed, clone and build the repository:
+```bash
+# open the location where the repository should go in a terminal
+# then clone the repository
+git clone https://github.com/TheFinchMachine/asteroids_bevy.git
+# move into the repository folder
+cd asteroids-bevy
+# build in debug mode
+cargo build
+```
