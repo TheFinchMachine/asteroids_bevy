@@ -70,7 +70,7 @@ fn spawn_scoreboard(
                 let window_height = window.resolution.height();
                 let text_height = window_height / 2.0 - config.margin;
 
-                let font = asset_server.load("fonts/FiraSans-Bold.ttf");
+                let font = asset_server.load("fonts/FiraMono-Medium.ttf");
                 let text_font = TextFont {
                     font,
                     font_size: config.font_size,
